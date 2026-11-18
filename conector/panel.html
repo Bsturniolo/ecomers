@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel de la tienda</title>
+<style>
+  :root { --bg:#f6f4ef; --card:#fff; --tx:#1f1c18; --mut:#6b645b; --line:#e3ddd3; --acc:#2747d6; --ok:#1d7a46; --bad:#b3261e; --warn:#a15c00; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16140f; --card:#211e18; --tx:#f1ece4; --mut:#a59d91; --line:#3a352c; --acc:#8ea2ff; --ok:#6fd39b; --bad:#ff8a80; --warn:#ffb74d; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--tx); font:15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--line); background:var(--card); position:sticky; top:0; z-index:2; flex-wrap:wrap; }
+  header b { font-size:17px; }
+  nav { display:flex; gap:4px; flex-wrap:wrap; }
+  nav a { padding:6px 10px; border-radius:8px; color:var(--tx); text-decoration:none; }
+  nav a.on { background:var(--acc); color:#fff; }
+  main { max-width:1100px; margin:0 auto; padding:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; }
+  .stat small { color:var(--mut); display:block; } .stat b { font-size:22px; font-variant-numeric:tabular-nums; }
+  h2 { font-size:17px; margin:0 0 12px; }
+  table { width:100%; border-collapse:collapse; } th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:12px; color:var(--mut); font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
+  .r { text-align:right; font-variant-numeric:tabular-nums; } .mut { color:var(--mut); } .tiny { font-size:12px; }
+  .tablebox { overflow-x:auto; }
+  .tag { display:inline-block; white-space:nowrap; padding:1px 7px; border-radius:99px; font-size:12px; border:1px solid var(--line); }
+  .tag.ok { color:var(--ok); border-color:currentColor; } .tag.bad { color:var(--bad); border-color:currentColor; } .tag.warn { color:var(--warn); border-color:currentColor; }
+  button, input, select { font:inherit; color:inherit; }
+  button { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:7px 12px; cursor:pointer; }
+  button.pri { background:var(--acc); border-color:var(--acc); color:#fff; } button.small { padding:3px 8px; font-size:13px; }
+  input, select { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:7px 9px; width:100%; }
+  label { display:block; font-size:13px; color:var(--mut); } label input, label select { margin-top:3px; color:var(--tx); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .form { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; align-items:end; }
+  #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--tx); color:var(--bg); padding:10px 16px; border-radius:10px; display:none; max-width:90vw; z-index:5; }
+  .vacio { padding:24px; text-align:center; color:var(--mut); }
+  tr.click { cursor:pointer; } tr.click:hover { background:var(--bg); }
+  details summary { cursor:pointer; }
+</style>
+</head>
+<body>
+<header>
+  <b>Panel de la tienda</b>
+  <nav id="nav"><a href="#inicio">Inicio</a><a href="#ventas">Ventas</a><a href="#productos">Productos</a><a href="#vender">Vender</a><a href="#conexion">Conexión</a></nav>
+</header>
+<main id="vista"></main>
+<div id="toast"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => '$ ' + Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+const fq = n => Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 3 });
+const fecha = ms => ms ? new Date(ms).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+const S = { carrito: [], token: '' };
+try { S.token = localStorage.getItem('panel-token') || ''; } catch (e) {}
+
+function toast(t) { const el = $('#toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.display = 'none', 3500); }
+
+async function api(ruta, metodo = 'GET', cuerpo) {
+  const r = await fetch(ruta, { method: metodo, headers: { 'Authorization': 'Bearer ' + S.token, 'Content-Type': 'application/json' }, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
+  if (r.status === 401) { S.token = ''; try { localStorage.removeItem('panel-token'); } catch (e) {} render(); throw new Error('Clave incorrecta'); }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail ? (typeof d.detail === 'string' ? d.detail : 'Datos inválidos') : 'Error ' + r.status);
+  return d;
+}
+const fallo = e => toast(e.message || String(e));
+
+function login() {
+  $('#vista').innerHTML = `<div class="card" style="max-width:420px;margin:40px auto"><h2>Entrar</h2>
+    <form id="fLogin"><label>Clave de administrador<input id="clave" type="password" autocomplete="current-password" required></label>
+    <p><button class="pri">Entrar</button></p></form></div>`;
+  $('#fLogin').onsubmit = async e => { e.preventDefault(); S.token = $('#clave').value.trim(); try { await api('/api/estado'); try { localStorage.setItem('panel-token', S.token); } catch (e) {} render(); } catch (e) { fallo(e); } };
+}
+
+async function render() {
+  if (!S.token) return login();
+  const v = (location.hash || '#inicio').slice(1);
+  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + v));
+  try { await ({ inicio, ventas, productos, vender, conexion }[v] || inicio)(); } catch (e) { fallo(e); }
+}
+window.onhashchange = render;
+
+// ---------- Inicio
+async function inicio() {
+  const e = await api('/api/estado');
+  const alertas = [
+    !e.conectada && `<li>La tienda todavía no está conectada. <a href="#conexion">Conectar</a></li>`,
+    e.ventas_revisar && `<li>${e.ventas_revisar} venta(s) web con productos que no se encontraron por SKU. <a href="#ventas">Ver</a></li>`,
+    e.avisos_error && `<li>${e.avisos_error} aviso(s) de Tiendanube con problemas. <a href="#conexion">Ver</a></li>`,
+    e.sin_sincronizar && `<li>${e.sin_sincronizar} producto(s) con stock pendiente de mandar a Tiendanube.</li>`,
+    e.stock_bajo && `<li>${e.stock_bajo} producto(s) con stock bajo. <a href="#productos">Ver</a></li>`,
+  ].filter(Boolean);
+  $('#vista').innerHTML = `
+  <div class="grid">
+    <div class="card stat"><small>Ventas de hoy</small><b>${fmt(e.hoy.total)}</b><small>${e.hoy.n} venta(s)</small></div>
+    <div class="card stat"><small>Ganancia de hoy</small><b>${fmt(e.hoy.ganancia)}</b><small>sin contar envíos</small></div>
+    <div class="card stat"><small>Ventas del mes</small><b>${fmt(e.mes.total)}</b><small>${e.mes.n} venta(s)</small></div>
+    <div class="card stat"><small>Ganancia del mes</small><b>${fmt(e.mes.ganancia)}</b><small>según el costo cargado</small></div>
+  </div>
+  <div class="card"><h2>Para mirar</h2>${alertas.length ? '<ul>' + alertas.join('') + '</ul>' : '<p class="mut">Todo en orden.</p>'}</div>`;
+}
+
+// ---------- Ventas
+async function ventas() {
+  const vs = await api('/api/ventas?limite=300');
+  $('#vista').innerHTML = `<div class="card"><h2>Ventas</h2>${vs.length ? `<div class="tablebox"><table><thead><tr><th>Fecha</th><th>Origen</th><th>Detalle</th><th>Pago</th><th class="r">Total</th><th class="r">Ganancia</th><th></th></tr></thead><tbody>
+  ${vs.map(v => `<tr${v.anulada ? ' style="opacity:.5"' : ''}><td class="tiny">${fecha(v.ts)}</td>
+    <td>${v.origen === 'web' ? `<span class="tag ok">Web #${esc(v.pedido_numero)}</span>` : '<span class="tag">Mostrador</span>'}
+      ${v.revisar && !v.anulada ? '<br><span class="tag warn">revisar</span>' : ''}${v.anulada ? '<br><span class="tag bad">anulada</span>' : ''}</td>
+    <td><details><summary>${v.items.length} producto(s)${v.cliente && v.cliente.nombre ? ' · ' + esc(v.cliente.nombre) : ''}</summary>
+      <ul class="tiny">${v.items.map(i => `<li>${fq(i.cantidad)} × ${esc(i.nombre)} ${i.sku ? '<span class="mut">(' + esc(i.sku) + ')</span>' : ''} · ${fmt(i.precio)}${i.sin_producto ? ' <span class="tag warn">no está cargado: el stock no se descontó</span>' : ''}</li>`).join('')}</ul>
+      ${v.envio ? `<div class="tiny mut">Envío ${fmt(v.envio)}</div>` : ''}${v.descuento ? `<div class="tiny mut">Descuento ${fmt(v.descuento)}</div>` : ''}
+      ${v.cliente && (v.cliente.email || v.cliente.telefono) ? `<div class="tiny mut">${esc(v.cliente.email)} ${esc(v.cliente.telefono)}</div>` : ''}</details></td>
+    <td class="tiny">${esc(v.medio_pago)}</td><td class="r">${fmt(v.total)}</td><td class="r">${fmt(v.total - v.envio - v.costo)}</td>
+    <td>${v.origen === 'mostrador' && !v.anulada ? `<button class="small" data-anular="${v.id}">Anular</button>` : ''}</td></tr>`).join('')}
+  </tbody></table></div>` : '<div class="vacio">Todavía no hay ventas.</div>'}</div>`;
+  document.querySelectorAll('[data-anular]').forEach(b => b.onclick = async () => {
+    if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = '¿Seguro?'; return; }
+    try { await api(`/api/ventas/${b.dataset.anular}/anular`, 'POST'); toast('Venta anulada, el stock volvió'); render(); } catch (e) { fallo(e); }
+  });
+}
+
+// ---------- Productos
+async function productos() {
+  S.productos = await api('/api/productos');
+  const q = S.filtro || '';
+  const lista = S.productos.filter(p => !q || (p.nombre + ' ' + p.sku + ' ' + p.codigo_barras).toLowerCase().includes(q.toLowerCase()));
+  $('#vista').innerHTML = `<div class="card"><div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Productos (${S.productos.length})</h2>
+    <input id="buscar" placeholder="Buscar por nombre o SKU" style="max-width:280px" value="${esc(q)}"></div>
+    ${lista.length ? `<div class="tablebox"><table><thead><tr><th>Producto</th><th>SKU</th><th class="r">Precio</th><th class="r">Costo</th><th class="r">Stock</th><th></th></tr></thead><tbody>
+    ${lista.map(p => `<tr><td>${esc(p.nombre)}${p.tn_variante_id ? '' : ' <span class="tag">solo acá</span>'}${p.sincronizado ? '' : ' <span class="tag warn">falta mandar a Tiendanube</span>'}</td>
+      <td class="tiny">${esc(p.sku) || '<span class="tag warn">sin SKU</span>'}</td><td class="r">${fmt(p.precio)}</td>
+      <td class="r">${p.costo ? fmt(p.costo) : '<span class="tag warn">cargar</span>'}</td>
+      <td class="r">${p.controla_stock ? (p.stock <= p.minimo ? `<span class="tag bad">${fq(p.stock)}</span>` : fq(p.stock)) : '<span class="tag">sin límite</span>'}</td>
+      <td><button class="small" data-edit="${p.id}">Editar</button></td></tr>
+      ${S.edit === p.id ? `<tr><td colspan="6"><form class="form" id="fEdit">
+        <label>Costo<input id="e_costo" type="number" min="0" step="0.01" value="${p.costo}"></label>
+        <label>Stock mínimo<input id="e_min" type="number" min="0" step="1" value="${p.minimo}"></label>
+        ${p.controla_stock ? `<label>Stock contado<input id="e_stock" type="number" min="0" step="1" placeholder="${fq(p.stock)}"></label>
+        <label>Motivo del ajuste<input id="e_motivo" placeholder="Conteo, rotura…"></label>` : ''}
+        <div class="row"><button class="pri">Guardar</button><button type="button" id="eCancel">Cancelar</button></div></form>
+        <div id="kardex" class="tiny mut" style="margin-top:10px"></div></td></tr>` : ''}`).join('')}
+    </tbody></table></div>` : '<div class="vacio">No hay productos. Conectá la tienda y traelos desde <a href="#conexion">Conexión</a>.</div>'}</div>`;
+  const b = $('#buscar'); b.oninput = () => { S.filtro = b.value; clearTimeout(b.t); b.t = setTimeout(() => { productos().then(() => { const n = $('#buscar'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }); }, 250); };
+  document.querySelectorAll('[data-edit]').forEach(x => x.onclick = () => { S.edit = S.edit === +x.dataset.edit ? null : +x.dataset.edit; productos(); });
+  if (S.edit && $('#fEdit')) {
+    $('#eCancel').onclick = () => { S.edit = null; productos(); };
+    api(`/api/productos/${S.edit}/movimientos?limite=15`).then(ms => { $('#kardex').innerHTML = ms.length ? '<b>Últimos movimientos</b><br>' + ms.map(m => `${fecha(m.ts)} · ${esc(m.tipo)} ${m.cantidad > 0 ? '+' : ''}${fq(m.cantidad)} → ${fq(m.saldo)} · ${esc(m.detalle)}`).join('<br>') : ''; }).catch(() => {});
+    $('#fEdit').onsubmit = async ev => {
+      ev.preventDefault();
+      try {
+        await api(`/api/productos/${S.edit}`, 'PATCH', { costo: Number($('#e_costo').value || 0), minimo: Number($('#e_min').value || 0) });
+        const st = $('#e_stock') && $('#e_stock').value;
+        if (st !== '' && st != null) await api(`/api/productos/${S.edit}/ajuste`, 'POST', { stock_real: Number(st), motivo: $('#e_motivo').value.trim() || 'Ajuste' });
+        toast('Guardado'); S.edit = null; productos();
+      } catch (e) { fallo(e); }
+    };
+  }
+}
+
+// ---------- Vender en mostrador
+async function vender() {
+  if (!S.productos) S.productos = await api('/api/productos');
+  const q = (S.qv || '').toLowerCase();
+  const res = q ? S.productos.filter(p => (p.nombre + ' ' + p.sku + ' ' + p.codigo_barras).toLowerCase().includes(q)).slice(0, 12) : [];
+  const total = S.carrito.reduce((a, i) => a + i.precio * i.cantidad, 0);
+  $('#vista').innerHTML = `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+  <div class="card"><h2>Buscar producto</h2><input id="qv" placeholder="Nombre, SKU o código de barras" value="${esc(S.qv || '')}" autofocus>
+    <div style="margin-top:8px">${res.map(p => `<button style="display:flex;justify-content:space-between;width:100%;margin-bottom:6px;text-align:left" data-add="${p.id}"><span>${esc(p.nombre)}<br><span class="tiny mut">${p.controla_stock ? 'stock ' + fq(p.stock) : 'sin límite'}</span></span><b>${fmt(p.precio)}</b></button>`).join('')}</div></div>
+  <div class="card"><h2>Venta</h2>${S.carrito.length ? `<table><tbody>${S.carrito.map((i, n) => `<tr><td>${esc(i.nombre)}</td>
+    <td style="width:70px"><input type="number" min="1" step="1" value="${i.cantidad}" data-cant="${n}"></td><td class="r">${fmt(i.precio * i.cantidad)}</td><td><button class="small" data-quitar="${n}">✕</button></td></tr>`).join('')}</tbody></table>
+    <form class="form" id="fVenta" style="margin-top:12px"><label>Medio de pago<select id="medio"><option>Efectivo</option><option>Transferencia</option><option>Mercado Pago</option><option>Débito</option><option>Crédito</option></select></label>
+    <label>Descuento ($)<input id="desc" type="number" min="0" step="0.01" value="0"></label><label>Cliente (opcional)<input id="cli"></label>
+    <div><div style="font-size:20px;margin-bottom:6px"><b>${fmt(total)}</b></div><button class="pri">Cobrar</button></div></form>` : '<p class="mut">Buscá un producto y tocá para agregarlo. El stock se descuenta acá y en Tiendanube.</p>'}</div></div>`;
+  const qi = $('#qv'); qi.oninput = () => { S.qv = qi.value; clearTimeout(qi.t); qi.t = setTimeout(() => vender().then(() => { const n = $('#qv'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); };
+  document.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { const p = S.productos.find(x => x.id === +b.dataset.add); const ya = S.carrito.find(i => i.producto_id === p.id); if (ya) ya.cantidad++; else S.carrito.push({ producto_id: p.id, nombre: p.nombre, precio: p.precio, cantidad: 1 }); if (p.controla_stock && (ya ? ya.cantidad : 1) > p.stock) toast('Ojo: quedan ' + fq(p.stock)); S.qv = ''; vender(); });
+  document.querySelectorAll('[data-quitar]').forEach(b => b.onclick = () => { S.carrito.splice(+b.dataset.quitar, 1); vender(); });
+  document.querySelectorAll('[data-cant]').forEach(x => x.onchange = () => { S.carrito[+x.dataset.cant].cantidad = Math.max(1, Number(x.value) || 1); vender(); });
+  if ($('#fVenta')) $('#fVenta').onsubmit = async ev => {
+    ev.preventDefault();
+    try {
+      const v = await api('/api/ventas', 'POST', { items: S.carrito.map(i => ({ producto_id: i.producto_id, cantidad: i.cantidad, precio: i.precio })), medio_pago: $('#medio').value, descuento: Number($('#desc').value || 0), cliente: $('#cli').value.trim() });
+      S.carrito = []; S.productos = null; toast('Venta registrada: ' + fmt(v.total)); vender();
+    } catch (e) { fallo(e); }
+  };
+}
+
+// ---------- Conexión con Tiendanube
+async function conexion() {
+  const [e, avs] = await Promise.all([api('/api/estado'), api('/api/avisos?limite=30')]);
+  $('#vista').innerHTML = `<div class="card"><h2>Tiendanube</h2>
+    <p>${e.conectada ? `<span class="tag ok">Conectada</span> Tienda N° ${esc(e.tienda_id)}` : '<span class="tag bad">Sin conectar</span>'}</p>
+    ${!e.configurada ? '<p class="tag warn">Faltan los datos de la app (TN_APP_ID y TN_APP_SECRETO) en el servidor. Ver docs/PASOS.md.</p>' : ''}
+    ${e.url_avisos ? `<p class="tiny mut">Tiendanube avisa las ventas a: ${esc(e.url_avisos)}</p>` : '<p class="tiny mut">Falta URL_PUBLICA en el servidor.</p>'}
+    <p class="tiny mut">Productos traídos por última vez: ${fecha(e.ultima_importacion)}</p>
+    <div class="row">
+      ${e.configurada ? `<button class="${e.conectada ? '' : 'pri'}" id="bInstalar">${e.conectada ? 'Volver a conectar' : 'Conectar la tienda'}</button>` : ''}
+      ${e.conectada ? `<button id="bImportar">Traer productos de Tiendanube</button><button id="bRevisar">Revisar conexión</button><button id="bDif">Comparar stock</button>` : ''}
+      <button id="bSimular">Simular venta web</button>
+    </div><div id="dif" style="margin-top:12px"></div></div>
+  <div class="card"><h2>Últimos avisos de Tiendanube</h2>${avs.length ? `<div class="tablebox"><table><thead><tr><th>Llegó</th><th>Aviso</th><th>Estado</th><th></th></tr></thead><tbody>
+    ${avs.map(a => `<tr><td class="tiny">${fecha(a.recibido_ts)}</td><td>${esc(a.evento)} ${a.recurso_id ? '<span class="mut">' + esc(a.recurso_id) + '</span>' : ''}</td>
+    <td><span class="tag ${a.estado === 'hecho' ? 'ok' : a.estado === 'ignorado' ? '' : 'warn'}">${esc(a.estado)}</span>${a.ultimo_error ? `<div class="tiny mut">${esc(a.ultimo_error)}</div>` : ''}</td>
+    <td>${a.estado === 'error' ? `<button class="small" data-re="${a.id}">Reintentar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="mut">Todavía no llegó ningún aviso.</p>'}</div>`;
+  const on = (id, fn) => { const b = $(id); if (b) b.onclick = async () => { b.disabled = true; try { await fn(); } catch (e) { fallo(e); } b.disabled = false; }; };
+  on('#bInstalar', async () => { const r = await api('/api/instalar', 'POST'); location.href = r.url; });
+  on('#bImportar', async () => { const r = await api('/api/productos/importar', 'POST'); S.productos = null; toast(`Listo: ${r.nuevos} nuevos, ${r.actualizados} actualizados`); });
+  on('#bRevisar', async () => { const r = await api('/api/revisar-conexion', 'POST'); toast(`Conexión bien. Avisos: ${r.avisos.join(', ') || 'falta URL pública'}. Stock enviado: ${r.enviados}`); });
+  on('#bSimular', async () => { const r = await api('/api/simular-pedido', 'POST'); S.productos = null; toast('Venta de prueba registrada (N° ' + r.venta_id + '). Mirala en Ventas.'); });
+  on('#bDif', async () => {
+    const d = await api('/api/diferencias');
+    $('#dif').innerHTML = d.length ? `<p><b>${d.length} producto(s) con stock distinto</b></p><table><thead><tr><th>Producto</th><th class="r">Acá</th><th class="r">Tiendanube</th></tr></thead><tbody>${d.map(x => `<tr><td>${esc(x.nombre)}</td><td class="r">${fq(x.aca)}</td><td class="r">${esc(x.tiendanube ?? 'sin límite')}</td></tr>`).join('')}</tbody></table>
+      <p><button class="pri" id="bSync">Mandar el stock de acá a Tiendanube</button></p>` : '<p class="tag ok">El stock coincide en todos los productos.</p>';
+    on('#bSync', async () => { const r = await api('/api/sincronizar', 'POST'); toast(`Enviados ${r.enviados}${r.errores ? ', con ' + r.errores + ' error(es)' : ''}`); $('#dif').innerHTML = ''; });
+  });
+  document.querySelectorAll('[data-re]').forEach(b => b.onclick = async () => { try { await api(`/api/avisos/${b.dataset.re}/reintentar`, 'POST'); render(); } catch (e) { fallo(e); } });
+}
+
+render();
+</script>
+</body>
+</html>
