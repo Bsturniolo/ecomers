@@ -35,6 +35,7 @@ class TiendanubeFalsa:
         self.webhooks = []
         self.stock_enviado = []
         self.falla_stock = False
+        self.falla_pedidos = False
         self.pedidos_hechos = []
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
@@ -52,6 +53,16 @@ class TiendanubeFalsa:
         ruta = ruta[len(pre):]
         if ruta == "/products":
             return httpx.Response(200, json=self.productos)
+        if ruta == "/orders":
+            if self.falla_pedidos:
+                return httpx.Response(500, json={})
+            desde = req.url.params.get("updated_at_min", "")
+            from datetime import datetime
+            d = datetime.fromisoformat(desde)
+            lista = [p for p in self.pedidos.values() if datetime.fromisoformat(p.get("updated_at") or p["paid_at"]) >= d]
+            pag, por = int(req.url.params.get("page", 1)), int(req.url.params.get("per_page", 30))
+            lote = lista[(pag - 1) * por: pag * por]
+            return httpx.Response(200, json=lote) if lote or pag == 1 else httpx.Response(404, json={})
         if ruta.startswith("/orders/"):
             p = self.pedidos.get(int(ruta.split("/")[-1]))
             return httpx.Response(200, json=p) if p else httpx.Response(404, json={})
@@ -105,11 +116,16 @@ def prod(c, sku):
     return next(p for p in c.get("/api/productos", headers=ADMIN).json() if p["sku"] == sku)
 
 
+def ahora_iso(minutos=0):
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) + timedelta(minutes=minutos)).isoformat()
+
+
 def pedido(id_, items, pago="paid", numero=None):
     total = sum(float(i["price"]) * i["quantity"] for i in items) + 3000
     return {"id": id_, "number": numero or id_ - 1000, "payment_status": pago, "subtotal": total - 3000,
             "shipping_cost_customer": "3000.00", "discount": "0.00", "total": f"{total:.2f}", "gateway_name": "Mercado Pago",
-            "paid_at": "2026-11-17T21:00:00-03:00", "customer": {"id": 7, "name": "Ana", "email": "ana@ejemplo.com", "phone": "261"},
+            "paid_at": ahora_iso(), "customer": {"id": 7, "name": "Ana", "email": "ana@ejemplo.com", "phone": "261"},
             "products": items}
 
 
@@ -337,7 +353,7 @@ def pedido_completo(id_):
     p = pedido(id_, [{"product_id": 20, "variant_id": 201, "sku": "FUN-NEG", "name": "Funda celular (Negra)", "quantity": 2,
                       "price": "6000.00", "variant_values": ["Negra"], "image": {"src": "https://img/funda.jpg"}}])
     p.update({
-        "created_at": "2026-11-17T20:50:00-03:00", "status": "open", "shipping_status": "unpacked", "storefront": "store",
+        "created_at": ahora_iso(-10), "status": "open", "shipping_status": "unpacked", "storefront": "store",
         "currency": "ARS", "shipping_option": "Correo Argentino - Envío a domicilio", "shipping_cost_owner": "2500.00",
         "shipping_address": {"name": "Ana Gómez", "address": "San Martín", "number": "1234", "floor": "3B", "city": "Mendoza",
                              "province": "Mendoza", "zipcode": "5500", "phone": "+5492615551234", "locality": "Ciudad"},
@@ -449,3 +465,98 @@ def test_base_vieja_se_actualiza_sola(tmp_path):
                            tareas_de_fondo=False)
     (v,) = TestClient(a).get("/api/ventas", headers=ADMIN).json()
     assert v["detalle"] == {} and v["envio_costo"] == 0
+
+
+# ---------------------------------------------------------------- traer pedidos (sin servidor)
+def pedido_t(id_, minutos, pago="paid", status="open", cant=1, sku="VENT-01", variante=101):
+    p = pedido(id_, [{"variant_id": variante, "sku": sku, "name": sku, "quantity": cant, "price": "45000"}], pago=pago)
+    p.update({"status": status, "paid_at": ahora_iso(minutos) if pago == "paid" else None,
+              "created_at": ahora_iso(minutos - 1), "updated_at": ahora_iso(minutos)})
+    return p
+
+
+def test_al_conectar_trae_ventas_viejas_sin_tocar_el_stock(c, tn):
+    tn.pedidos[7001] = pedido_t(7001, -60 * 24 * 5)          # vendido hace 5 días: ya está descontado en Tiendanube
+    tn.pedidos[7002] = pedido_t(7002, -60 * 24 * 45)         # hace 45 días: fuera de los 30 días
+    r = conectar(c)
+    assert "1 ventas" in r.text
+    (v,) = c.get("/api/ventas", headers=ADMIN).json()
+    assert v["pedido_tn_id"] == 7001
+    assert prod(c, "VENT-01")["stock"] == 8                   # el stock de Tiendanube ya la tenía en cuenta
+    assert c.get("/api/estado", headers=ADMIN).json()["ultima_traida"]
+
+
+def test_trae_pedidos_nuevos_sin_avisos_y_sin_duplicar(c, tn):
+    conectar(c)
+    tn.pedidos[7003] = pedido_t(7003, 1, cant=2)
+    tn.pedidos[7004] = pedido_t(7004, 1, pago="pending")
+    r = c.post("/api/traer-pedidos", headers=ADMIN).json()
+    assert r == {"ok": True, "nuevas": 1, "anuladas": 0, "actualizadas": 0}
+    assert prod(c, "VENT-01")["stock"] == 6
+    # Otra vez: no duplica. El pendiente se paga después y entra.
+    tn.pedidos[7004] = pedido_t(7004, 2)
+    r = c.post("/api/traer-pedidos", headers=ADMIN).json()
+    assert r["nuevas"] == 1 and r["actualizadas"] == 1
+    assert prod(c, "VENT-01")["stock"] == 5
+    assert len(c.get("/api/ventas", headers=ADMIN).json()) == 2
+
+
+def test_aviso_y_traida_del_mismo_pedido_cuentan_una_vez(c, tn):
+    conectar(c)
+    tn.pedidos[7005] = pedido_t(7005, 1)
+    avisar(c, "order/paid", 7005)
+    c.app_.state.traer_pedidos()
+    assert len(c.get("/api/ventas", headers=ADMIN).json()) == 1
+    assert prod(c, "VENT-01")["stock"] == 7
+
+
+def test_pedido_cancelado_se_entera_al_traer(c, tn):
+    conectar(c)
+    tn.pedidos[7006] = pedido_t(7006, 1, cant=3)
+    c.app_.state.traer_pedidos()
+    assert prod(c, "VENT-01")["stock"] == 5
+    tn.pedidos[7006] = pedido_t(7006, 2, cant=3, status="cancelled")
+    r = c.app_.state.traer_pedidos()
+    assert r["anuladas"] == 1 and prod(c, "VENT-01")["stock"] == 8
+    assert c.app_.state.traer_pedidos()["anuladas"] == 0      # no devuelve dos veces
+
+
+def test_traer_desde_una_fecha(c, tn):
+    conectar(c)
+    tn.pedidos[7007] = pedido_t(7007, -60 * 24 * 60)          # hace 60 días
+    import time
+    r = c.post("/api/traer-pedidos", json={"desde_ms": int(time.time() * 1000) - 90 * 86_400_000}, headers=ADMIN).json()
+    assert r["nuevas"] == 1 and prod(c, "VENT-01")["stock"] == 8
+
+
+def test_si_tiendanube_falla_al_traer_se_avisa(c, tn):
+    conectar(c)
+    tn.falla_pedidos = True
+    assert c.post("/api/traer-pedidos", headers=ADMIN).status_code == 502
+    assert "500" in c.get("/api/estado", headers=ADMIN).json()["error_traer"]
+    tn.falla_pedidos = False
+    assert c.post("/api/traer-pedidos", headers=ADMIN).json()["ok"]
+    assert c.get("/api/estado", headers=ADMIN).json()["error_traer"] == ""
+
+
+def test_conectar_pegando_la_direccion(c, tn):
+    r = c.post("/api/instalar/codigo", json={"codigo": "http://localhost:8000/tiendanube/instalada?code=codigo-bueno"}, headers=ADMIN)
+    assert r.status_code == 200, r.text
+    assert "conectada" in r.json()["mensaje"]
+    assert c.get("/api/estado", headers=ADMIN).json()["conectada"] is True
+    assert c.post("/api/instalar/codigo", json={"codigo": "codigo-malo"}, headers=ADMIN).status_code >= 400
+
+
+def test_sin_internet_da_un_error_claro(c, tn):
+    def caida(req):
+        raise httpx.ConnectError("sin red")
+    c.app_.state.base.set("tienda_id", TIENDA)
+    c.app_.state.base.set("token", "llave-123")
+    a = conector.crear_app(str(pathlib.Path(c.app_.state.base.con.execute("PRAGMA database_list").fetchone()[2])), admin_token=TOKEN,
+                           app_id="999", secreto_app=SECRETO, url_publica="", contacto="x", tienda_esperada="",
+                           http=httpx.Client(transport=httpx.MockTransport(caida)), tareas_de_fondo=False)
+    cl = TestClient(a)
+    r = cl.post("/api/instalar/codigo", json={"codigo": "codigo-bueno"}, headers=ADMIN)
+    assert r.status_code == 400 and "internet" in r.json()["detail"]
+    r = cl.post("/api/traer-pedidos", headers=ADMIN)
+    assert r.status_code == 502 and "internet" in r.json()["detail"]

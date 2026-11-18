@@ -22,8 +22,10 @@ import os
 import pathlib
 import secrets
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
@@ -41,6 +43,9 @@ log = logging.getLogger("conector")
 AQUI = pathlib.Path(__file__).resolve().parent
 MAX_INTENTOS = 12           # un aviso que falla 12 veces queda en "error" para mirarlo a mano
 SEGUNDOS_REINTENTO = 60     # cada cuánto se reintentan avisos y stock pendientes
+# Cada cuánto la app le pregunta a Tiendanube por pedidos nuevos (sirve sin servidor: la app sale a buscarlos).
+SEGUNDOS_TRAER = int(os.environ.get("TRAER_CADA_SEGUNDOS", "120"))
+DIAS_HISTORIA = 30          # al conectar la tienda, trae las ventas de los últimos 30 días (sin tocar el stock)
 
 
 def iso_a_ms(texto: str | None) -> int | None:
@@ -187,6 +192,14 @@ class MovPlata(BaseModel):
     fecha_ms: Optional[int] = None
 
 
+class CodigoInstalacion(BaseModel):
+    codigo: str = Field(min_length=4, max_length=2000)
+
+
+class Desde(BaseModel):
+    desde_ms: Optional[int] = None
+
+
 # ---------------------------------------------------------------- app
 def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, app_id: str | None = None,
               secreto_app: str | None = None, url_publica: str | None = None, contacto: str | None = None,
@@ -256,6 +269,8 @@ def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, a
                                              avisar_tienda=False)
                         nuevos += 1
         base.set("ultima_importacion", str(ahora_ms()))
+        if not base.get("stock_desde"):
+            base.set("stock_desde", str(ahora_ms()))
         return {"nuevos": nuevos, "actualizados": actualizados}
 
     def empujar_stock() -> dict:
@@ -328,12 +343,14 @@ def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, a
                  round(costo, 2), medio or str(pedido.get("gateway_name") or pedido.get("gateway") or "Tienda web"),
                  json.dumps(cliente), int(revisar), json.dumps(det), json.dumps(pedido)[:200_000], envio_costo))
             venta_id = cur.lastrowid
-            for i in items:
+            # Una venta anterior a cuando se trajo el stock de Tiendanube ya está descontada en ese stock: no se vuelve a restar.
+            stock_desde = int(base.get("stock_desde") or 0)
+            for i in items if ts >= stock_desde else []:
                 if i["producto_id"]:
                     # Tiendanube ya descontó su stock: acá solo se descuenta el nuestro.
                     base.mover_stock(i["producto_id"], -i["cantidad"], "Venta web", f"Pedido #{pedido.get('number') or pid}",
                                      venta_id=venta_id, avisar_tienda=False, ts=ts)
-        return {"venta_id": venta_id, "repetido": False, "revisar": revisar}
+        return {"venta_id": venta_id, "repetido": False, "revisar": revisar, "historica": ts < stock_desde}
 
     def anular_venta(venta_id: int, motivo: str, avisar_tienda: bool) -> dict | None:
         with base.transaccion():
@@ -387,6 +404,56 @@ def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, a
         base.ejec("UPDATE avisos SET estado = ?, intentos = ?, ultimo_error = ?, procesado_ts = ? WHERE id = ?",
                   (estado, intentos, error, ahora_ms(), aviso_id))
         return estado
+
+    def aplicar_pedido(pedido: dict) -> str:
+        """Pone al día una venta según cómo está el pedido en Tiendanube. Se puede llamar muchas veces sin duplicar nada."""
+        v = base.uno("SELECT id, anulada FROM ventas WHERE pedido_tn_id = ?", (int(pedido["id"]),))
+        if _texto(pedido.get("status")) == "cancelled":
+            if v and not v["anulada"]:
+                anular_venta(v["id"], "Pedido cancelado en Tiendanube", avisar_tienda=False)
+                return "anulada"
+            return "nada"
+        if not v and pedido.get("payment_status") == "paid":
+            return "nueva" if not registrar_venta_web(pedido)["repetido"] else "nada"
+        if v:
+            base.ejec("UPDATE ventas SET detalle = ?, pedido_tn = ? WHERE id = ?",
+                      (json.dumps(detalle_pedido(pedido)), json.dumps(pedido)[:200_000], v["id"]))
+            return "actualizada"
+        return "nada"
+
+    traer_lock = threading.Lock()
+
+    def traer_pedidos(desde_ms: int | None = None) -> dict:
+        """La app va a buscar a Tiendanube los pedidos nuevos o cambiados desde la última vez.
+
+        Así no depende de los avisos: funciona aunque la app corra en una compu sin dirección pública,
+        y se pone al día sola cada vez que se prende.
+        """
+        a = api()
+        if not a:
+            return {"ok": False, "motivo": "sin conectar"}
+        if not traer_lock.acquire(blocking=False):
+            return {"ok": False, "motivo": "ya se está trayendo"}
+        try:
+            inicio = ahora_ms()
+            if desde_ms is None:
+                ultima = int(base.get("ultima_traida") or 0)
+                # 10 minutos de margen por si un pedido se cambió justo mientras se traía la vez anterior
+                desde_ms = ultima - 600_000 if ultima else inicio - DIAS_HISTORIA * 86_400_000
+            desde_iso = datetime.fromtimestamp(desde_ms / 1000, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            cuenta = {"nueva": 0, "anulada": 0, "actualizada": 0, "nada": 0}
+            try:
+                for p in a.pedidos_desde(desde_iso):
+                    cuenta[aplicar_pedido(p)] += 1
+            except Exception as e:
+                base.set("ultima_traida_error", f"{ahora_ms()}|{str(e)[:300]}")
+                log.warning("No se pudieron traer los pedidos: %s", e)
+                return {"ok": False, "motivo": str(e)[:300]}
+            base.set("ultima_traida", str(inicio))
+            base.borrar("ultima_traida_error")
+            return {"ok": True, "nuevas": cuenta["nueva"], "anuladas": cuenta["anulada"], "actualizadas": cuenta["actualizada"]}
+        finally:
+            traer_lock.release()
 
     def reintentar_pendientes() -> None:
         for av in base.q("SELECT id FROM avisos WHERE estado = 'pendiente' ORDER BY id LIMIT 50"):
@@ -445,6 +512,50 @@ def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, a
         base.set("estado_instalacion", estado)
         return {"url": tn.url_instalar(app_id, estado)}
 
+    def conectar_con_codigo(code: str) -> str:
+        try:
+            datos = tn.canjear_codigo(app_id, secreto, code, http=http)
+        except tn.ErrorTiendanube as e:
+            raise HTTPException(400, f"{e}. El código dura 5 minutos: volvé a tocar 'Conectar la tienda'.")
+        if tienda_esperada and datos["tienda_id"] != tienda_esperada:
+            raise HTTPException(403, "Esta app solo se puede instalar en la tienda configurada")
+        base.set("tienda_id", datos["tienda_id"])
+        base.set("token", datos["token"])
+        base.borrar("estado_instalacion")
+        mensaje = "Tienda conectada."
+        try:
+            if url_pub.startswith("https://"):
+                api().registrar_avisos(url_pub + "/tiendanube/aviso")
+            r = importar_productos()
+            mensaje += f" Se trajeron {r['nuevos']} productos."
+            t = traer_pedidos()
+            if t.get("ok"):
+                mensaje += f" Se trajeron {t['nuevas']} ventas de los últimos {DIAS_HISTORIA} días."
+        except Exception as e:
+            mensaje += f" Hubo un problema al terminar de configurar: {e}. Probá 'Revisar conexión' en el panel."
+        return mensaje
+
+    @app.post("/api/instalar/codigo", dependencies=[Depends(admin)])
+    def instalar_con_codigo(d: CodigoInstalacion):
+        """Sin servidor: después de aceptar la app, se pega acá el código (o la dirección completa con ?code=...)."""
+        if not app_id or not secreto:
+            raise HTTPException(503, "Faltan TN_APP_ID y TN_APP_SECRETO en la configuración")
+        codigo = d.codigo.strip()
+        if "code=" in codigo:
+            codigo = parse_qs(urlparse(codigo).query).get("code", [""])[0]
+        if not codigo:
+            raise HTTPException(422, "No encontré el código en lo que pegaste")
+        return {"mensaje": conectar_con_codigo(codigo)}
+
+    @app.post("/api/traer-pedidos", dependencies=[Depends(admin)])
+    def traer_ahora(d: Optional[Desde] = None):
+        d = d or Desde()
+        api_o_409()
+        r = traer_pedidos(d.desde_ms)
+        if not r.get("ok") and r.get("motivo") != "ya se está trayendo":
+            raise HTTPException(502, "Tiendanube no respondió bien: " + r.get("motivo", ""))
+        return r
+
     @app.get("/tiendanube/instalada", response_class=HTMLResponse)
     def instalada(code: str = "", state: str = ""):
         """Tiendanube vuelve acá después de que la clienta acepta la app (URL de redirección de la app)."""
@@ -456,22 +567,7 @@ def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, a
             raise HTTPException(400, "Ya hay una tienda conectada. Para cambiarla, empezá desde el panel.")
         if not code:
             raise HTTPException(400, "Falta el código de Tiendanube")
-        datos = tn.canjear_codigo(app_id, secreto, code, http=http)
-        if tienda_esperada and datos["tienda_id"] != tienda_esperada:
-            raise HTTPException(403, "Esta app solo se puede instalar en la tienda configurada")
-        base.set("tienda_id", datos["tienda_id"])
-        base.set("token", datos["token"])
-        base.borrar("estado_instalacion")
-        mensaje = "Tienda conectada."
-        try:
-            if url_pub.startswith("https://"):
-                api().registrar_avisos(url_pub + "/tiendanube/aviso")
-            else:
-                mensaje += " Ojo: falta URL_PUBLICA con https, así que Tiendanube todavía no puede avisar las ventas."
-            r = importar_productos()
-            mensaje += f" Se trajeron {r['nuevos']} productos."
-        except Exception as e:
-            mensaje += f" Hubo un problema al terminar de configurar: {e}. Probá 'Revisar conexión' en el panel."
+        mensaje = conectar_con_codigo(code)
         return f"<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'><title>Conector</title>" \
                f"<body style='font-family:system-ui;max-width:520px;margin:40px auto;padding:0 16px'><h2>Listo</h2>" \
                f"<p>{mensaje}</p><p><a href='/panel'>Ir al panel</a></p>"
@@ -517,6 +613,10 @@ def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, a
             "configurada": bool(app_id and secreto),
             "url_avisos": (url_pub + "/tiendanube/aviso") if url_pub else "",
             "ultima_importacion": int(base.get("ultima_importacion") or 0) or None,
+            "ultima_traida": int(base.get("ultima_traida") or 0) or None,
+            "error_traer": (base.get("ultima_traida_error").split("|", 1)[1] if base.get("ultima_traida_error") else ""),
+            "con_avisos": url_pub.startswith("https://"),
+            "traer_cada_min": round(SEGUNDOS_TRAER / 60, 1),
             "hoy": totales(desde_hoy),
             "mes": totales(desde_mes),
             "stock_bajo": base.uno("SELECT COUNT(*) n FROM productos WHERE activo=1 AND controla_stock=1 AND stock <= minimo")["n"],
@@ -845,16 +945,23 @@ def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, a
     app.state.empujar_stock = empujar_stock
     app.state.registrar_venta_web = registrar_venta_web
     app.state.reintentar_pendientes = reintentar_pendientes
+    app.state.traer_pedidos = traer_pedidos
 
     if tareas_de_fondo:
         parar = threading.Event()
 
         def ciclo():
-            while not parar.wait(SEGUNDOS_REINTENTO):
+            proxima_traida = 0.0  # la primera vez trae apenas arranca
+            while True:
                 try:
+                    if time.monotonic() >= proxima_traida:
+                        traer_pedidos()
+                        proxima_traida = time.monotonic() + SEGUNDOS_TRAER
                     reintentar_pendientes()
                 except Exception as e:  # pragma: no cover
-                    log.exception("Fallo en reintentos: %s", e)
+                    log.exception("Fallo en tareas de fondo: %s", e)
+                if parar.wait(min(SEGUNDOS_REINTENTO, SEGUNDOS_TRAER)):
+                    break
 
         @app.on_event("startup")
         def arrancar():  # pragma: no cover
