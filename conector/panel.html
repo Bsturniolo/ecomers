@@ -21,7 +21,7 @@
   h2 { font-size:17px; margin:0 0 12px; }
   table { width:100%; border-collapse:collapse; } th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { font-size:12px; color:var(--mut); font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
-  .r { text-align:right; font-variant-numeric:tabular-nums; } .mut { color:var(--mut); } .tiny { font-size:12px; }
+  .r { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; } .mut { color:var(--mut); } .tiny { font-size:12px; }
   .tablebox { overflow-x:auto; }
   .tag { display:inline-block; white-space:nowrap; padding:1px 7px; border-radius:99px; font-size:12px; border:1px solid var(--line); }
   .tag.ok { color:var(--ok); border-color:currentColor; } .tag.bad { color:var(--bad); border-color:currentColor; } .tag.warn { color:var(--warn); border-color:currentColor; }
@@ -41,17 +41,20 @@
 <body>
 <header>
   <b>Panel de la tienda</b>
-  <nav id="nav"><a href="#inicio">Inicio</a><a href="#ventas">Ventas</a><a href="#productos">Productos</a><a href="#vender">Vender</a><a href="#conexion">Conexión</a></nav>
+  <nav id="nav"><a href="#inicio">Inicio</a><a href="#ventas">Ventas</a><a href="#productos">Productos</a><a href="#vender">Vender</a><a href="#balances">Balances</a><a href="#clientes">Clientes</a><a href="#conexion">Conexión</a></nav>
 </header>
 <main id="vista"></main>
 <div id="toast"></div>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt = n => '$ ' + Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+const fmt = n => (n < 0 ? '−' : '') + '$ ' + Math.abs(Number(n || 0)).toLocaleString('es-AR', { maximumFractionDigits: Math.abs(n) >= 1000 ? 0 : 2 });
 const fq = n => Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 3 });
 const fecha = ms => ms ? new Date(ms).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 const S = { carrito: [], token: '' };
+const TZ = -new Date().getTimezoneOffset();  // minutos respecto de UTC (Argentina: -180)
+const dia = ms => new Date(ms).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' });
+const pct = (a, b) => b ? Math.round((a - b) / Math.abs(b) * 100) : null;
 try { S.token = localStorage.getItem('panel-token') || ''; } catch (e) {}
 
 function toast(t) { const el = $('#toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.display = 'none', 3500); }
@@ -76,13 +79,13 @@ async function render() {
   if (!S.token) return login();
   const v = (location.hash || '#inicio').slice(1);
   document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + v));
-  try { await ({ inicio, ventas, productos, vender, conexion }[v] || inicio)(); } catch (e) { fallo(e); }
+  try { await ({ inicio, ventas, productos, vender, balances, clientes, conexion }[v] || inicio)(); } catch (e) { fallo(e); }
 }
 window.onhashchange = render;
 
 // ---------- Inicio
 async function inicio() {
-  const e = await api('/api/estado');
+  const e = await api('/api/estado?tz=' + TZ);
   const alertas = [
     !e.conectada && `<li>La tienda todavía no está conectada. <a href="#conexion">Conectar</a></li>`,
     e.ventas_revisar && `<li>${e.ventas_revisar} venta(s) web con productos que no se encontraron por SKU. <a href="#ventas">Ver</a></li>`,
@@ -93,27 +96,52 @@ async function inicio() {
   $('#vista').innerHTML = `
   <div class="grid">
     <div class="card stat"><small>Ventas de hoy</small><b>${fmt(e.hoy.total)}</b><small>${e.hoy.n} venta(s)</small></div>
-    <div class="card stat"><small>Ganancia de hoy</small><b>${fmt(e.hoy.ganancia)}</b><small>sin contar envíos</small></div>
+    <div class="card stat"><small>Ganancia de hoy</small><b>${fmt(e.hoy.ganancia)}</b><small>ya restado el costo y el envío</small></div>
     <div class="card stat"><small>Ventas del mes</small><b>${fmt(e.mes.total)}</b><small>${e.mes.n} venta(s)</small></div>
-    <div class="card stat"><small>Ganancia del mes</small><b>${fmt(e.mes.ganancia)}</b><small>según el costo cargado</small></div>
+    <div class="card stat"><small>Ganancia del mes</small><b>${fmt(e.mes.ganancia)}</b><small>ya restado el costo y el envío</small></div>
   </div>
+  <p class="tiny mut">Gastos (publicidad, comisiones, etc.) e inversión: en <a href="#balances">Balances</a>.</p>
   <div class="card"><h2>Para mirar</h2>${alertas.length ? '<ul>' + alertas.join('') + '</ul>' : '<p class="mut">Todo en orden.</p>'}</div>`;
 }
 
 // ---------- Ventas
+const ENVIO = { unpacked: ['Sin preparar', 'warn'], unshipped: ['Sin enviar', 'warn'], partially_packed: ['Preparando', 'warn'], partially_fulfilled: ['Enviado en parte', 'warn'], shipped: ['Enviado', 'ok'], delivered: ['Entregado', 'ok'] };
+const PAGO = { credit_card: 'Tarjeta de crédito', debit_card: 'Tarjeta de débito', account_money: 'Dinero en Mercado Pago', ticket: 'Efectivo (cupón)', bank_transfer: 'Transferencia', wire_transfer: 'Transferencia', cash: 'Efectivo', other: 'Otro' };
+const fila2 = (k, v) => v || v === 0 ? `<tr><td class="mut" style="width:38%">${k}</td><td>${v}</td></tr>` : '';
+function detalleVenta(v) {
+  const d = v.detalle || {}, e = d.envio || {}, pg = d.pago || {}, ds = d.descuentos || {}, f = d.facturacion || {}, c = v.cliente || {};
+  const gan = v.total - v.envio_costo - v.costo;
+  return `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:16px;margin-top:8px">
+    <div><b>Productos</b><table class="tiny">${v.items.map(i => `<tr><td>${fq(i.cantidad)} ×</td><td>${esc(i.nombre)}${i.variante && !String(i.nombre).includes(i.variante) ? ' (' + esc(i.variante) + ')' : ''}<br><span class="mut">${esc(i.sku)}${i.costo ? ' · costo ' + fmt(i.costo) : ' · <span class="tag warn">sin costo</span>'}</span>${i.sin_producto ? '<br><span class="tag warn">no está cargado: el stock no se descontó</span>' : ''}</td><td class="r">${fmt(i.precio * i.cantidad)}</td></tr>`).join('')}</table></div>
+    <div><b>Plata</b><table class="tiny">${fila2('Subtotal', v.subtotal ? fmt(v.subtotal) : '')}${fila2('Envío cobrado', v.envio ? fmt(v.envio) : '')}${fila2('Descuento', v.descuento ? '−' + fmt(v.descuento) : '')}${ds.cupones && ds.cupones.length ? fila2('Cupón', esc(ds.cupones.join(', ')) + (ds.cupon ? ' (−' + fmt(ds.cupon) + ')' : '')) : ''}${fila2('Desc. por medio de pago', ds.medio_pago ? '−' + fmt(ds.medio_pago) : '')}
+      ${fila2('<b>Total cobrado</b>', '<b>' + fmt(v.total) + '</b>')}${fila2('Costo mercadería', '−' + fmt(v.costo))}${fila2('Envío que paga la tienda', v.envio_costo ? '−' + fmt(v.envio_costo) : '')}${fila2('<b>Ganancia</b>', '<b>' + fmt(gan) + '</b>' + (v.total ? ` <span class="mut">(${Math.round(gan / v.total * 100)}%)</span>` : ''))}</table></div>
+    <div><b>Pago y horarios</b><table class="tiny">${fila2('Medio', esc(v.medio_pago))}${fila2('Forma', esc(PAGO[pg.metodo] || pg.metodo || ''))}${fila2('Tarjeta', esc(pg.tarjeta || ''))}${fila2('Cuotas', pg.cuotas && pg.cuotas > 1 ? pg.cuotas : '')}${fila2('N° de operación', esc(pg.operacion || ''))}
+      ${fila2('Pedido hecho', d.creado_ts ? fecha(d.creado_ts) : '')}${fila2('Pagado', d.pagado_ts ? fecha(d.pagado_ts) : (v.origen === 'mostrador' ? fecha(v.ts) : ''))}${fila2('Enviado', d.enviado_ts ? fecha(d.enviado_ts) : '')}${fila2('Anulada', v.anulada_ts ? fecha(v.anulada_ts) : '')}</table></div>
+    <div><b>Cliente</b><table class="tiny">${fila2('Nombre', esc(c.nombre))}${fila2('Email', esc(c.email))}${fila2('Teléfono', esc(c.telefono))}${fila2('DNI/CUIT', esc(c.documento || f.documento || ''))}${fila2('Factura a', f.nombre && f.nombre !== c.nombre ? esc(f.nombre) : '')}${fila2('Nota del cliente', esc(d.nota_cliente || ''))}${fila2('Nota', esc(d.nota_tienda || ''))}</table></div>
+    ${e.metodo || e.direccion ? `<div><b>Envío</b><table class="tiny">${fila2('Estado', ENVIO[d.estado_envio] ? `<span class="tag ${ENVIO[d.estado_envio][1]}">${ENVIO[d.estado_envio][0]}</span>` : esc(d.estado_envio || ''))}${fila2('Método', esc(e.metodo))}${fila2('Recibe', esc(e.destinatario))}${fila2('Dirección', esc([e.direccion, e.localidad, e.ciudad, e.provincia, e.cp].filter(Boolean).join(', ')))}${fila2('Teléfono', esc(e.telefono))}${fila2('Seguimiento', e.seguimiento ? (e.seguimiento_url ? `<a href="${esc(e.seguimiento_url)}" target="_blank" rel="noopener">${esc(e.seguimiento)}</a>` : esc(e.seguimiento)) : '')}</table></div>` : ''}
+  </div>${v.origen === 'web' && v.pedido_tn_id > 0 ? `<p><button class="small" data-crudo="${v.id}">Ver el pedido completo de Tiendanube</button></p><pre class="tiny" id="crudo${v.id}" style="display:none;white-space:pre-wrap;max-height:300px;overflow:auto;background:var(--bg);padding:8px;border-radius:8px"></pre>` : ''}`;
+}
 async function ventas() {
-  const vs = await api('/api/ventas?limite=300');
-  $('#vista').innerHTML = `<div class="card"><h2>Ventas</h2>${vs.length ? `<div class="tablebox"><table><thead><tr><th>Fecha</th><th>Origen</th><th>Detalle</th><th>Pago</th><th class="r">Total</th><th class="r">Ganancia</th><th></th></tr></thead><tbody>
-  ${vs.map(v => `<tr${v.anulada ? ' style="opacity:.5"' : ''}><td class="tiny">${fecha(v.ts)}</td>
-    <td>${v.origen === 'web' ? `<span class="tag ok">Web #${esc(v.pedido_numero)}</span>` : '<span class="tag">Mostrador</span>'}
+  const vs = await api('/api/ventas?limite=500');
+  const fo = S.fVentas || 'todas', q = (S.qVentas || '').toLowerCase();
+  const lista = vs.filter(v => (fo === 'todas' || v.origen === fo) && (!q || JSON.stringify([v.pedido_numero, v.cliente, v.items.map(i => i.nombre)]).toLowerCase().includes(q)));
+  $('#vista').innerHTML = `<div class="card"><div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Ventas</h2>
+    <div class="row"><select id="fo" style="width:auto"><option value="todas">Todas</option><option value="web"${fo === 'web' ? ' selected' : ''}>Tienda web</option><option value="mostrador"${fo === 'mostrador' ? ' selected' : ''}>Por fuera</option></select>
+    <input id="qVentas" placeholder="Buscar cliente, producto o N°" style="max-width:240px" value="${esc(S.qVentas || '')}"></div></div>
+  ${lista.length ? `<div class="tablebox"><table><thead><tr><th>Fecha</th><th>Origen</th><th>Detalle</th><th>Pago</th><th class="r">Total</th><th class="r">Ganancia</th><th></th></tr></thead><tbody>
+  ${lista.map(v => `<tr${v.anulada ? ' style="opacity:.5"' : ''}><td class="tiny">${fecha(v.ts)}</td>
+    <td>${v.origen === 'web' ? `<span class="tag ok">Web #${esc(v.pedido_numero)}</span>` : '<span class="tag">Por fuera</span>'}
+      ${v.detalle && ENVIO[v.detalle.estado_envio] && !v.anulada ? `<br><span class="tag ${ENVIO[v.detalle.estado_envio][1]}">${ENVIO[v.detalle.estado_envio][0]}</span>` : ''}
       ${v.revisar && !v.anulada ? '<br><span class="tag warn">revisar</span>' : ''}${v.anulada ? '<br><span class="tag bad">anulada</span>' : ''}</td>
-    <td><details><summary>${v.items.length} producto(s)${v.cliente && v.cliente.nombre ? ' · ' + esc(v.cliente.nombre) : ''}</summary>
-      <ul class="tiny">${v.items.map(i => `<li>${fq(i.cantidad)} × ${esc(i.nombre)} ${i.sku ? '<span class="mut">(' + esc(i.sku) + ')</span>' : ''} · ${fmt(i.precio)}${i.sin_producto ? ' <span class="tag warn">no está cargado: el stock no se descontó</span>' : ''}</li>`).join('')}</ul>
-      ${v.envio ? `<div class="tiny mut">Envío ${fmt(v.envio)}</div>` : ''}${v.descuento ? `<div class="tiny mut">Descuento ${fmt(v.descuento)}</div>` : ''}
-      ${v.cliente && (v.cliente.email || v.cliente.telefono) ? `<div class="tiny mut">${esc(v.cliente.email)} ${esc(v.cliente.telefono)}</div>` : ''}</details></td>
-    <td class="tiny">${esc(v.medio_pago)}</td><td class="r">${fmt(v.total)}</td><td class="r">${fmt(v.total - v.envio - v.costo)}</td>
-    <td>${v.origen === 'mostrador' && !v.anulada ? `<button class="small" data-anular="${v.id}">Anular</button>` : ''}</td></tr>`).join('')}
-  </tbody></table></div>` : '<div class="vacio">Todavía no hay ventas.</div>'}</div>`;
+    <td><button class="small" data-ver="${v.id}" style="text-align:left">${S.abierta === v.id ? '▾' : '▸'} ${esc(v.items.map(i => fq(i.cantidad) + ' × ' + i.nombre).join(', ').slice(0, 70))}</button>${v.cliente && v.cliente.nombre ? `<div class="tiny mut">${esc(v.cliente.nombre)}</div>` : ''}</td>
+    <td class="tiny">${esc(v.medio_pago)}</td><td class="r">${fmt(v.total)}</td><td class="r">${fmt(v.total - v.envio_costo - v.costo)}</td>
+    <td>${v.origen === 'mostrador' && !v.anulada ? `<button class="small" data-anular="${v.id}">Anular</button>` : ''}</td></tr>
+    ${S.abierta === v.id ? `<tr><td colspan="7" style="background:var(--bg)">${detalleVenta(v)}</td></tr>` : ''}`).join('')}
+  </tbody></table></div>` : '<div class="vacio">No hay ventas para mostrar.</div>'}</div>`;
+  $('#fo').onchange = () => { S.fVentas = $('#fo').value; ventas(); };
+  const qi = $('#qVentas'); qi.oninput = () => { S.qVentas = qi.value; clearTimeout(qi.t); qi.t = setTimeout(() => ventas().then(() => { const n = $('#qVentas'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 250); };
+  document.querySelectorAll('[data-ver]').forEach(b => b.onclick = () => { S.abierta = S.abierta === +b.dataset.ver ? null : +b.dataset.ver; ventas(); });
+  document.querySelectorAll('[data-crudo]').forEach(b => b.onclick = async () => { const pre = $('#crudo' + b.dataset.crudo); if (pre.style.display === 'block') { pre.style.display = 'none'; return; } try { pre.textContent = JSON.stringify(await api(`/api/ventas/${b.dataset.crudo}/pedido`), null, 2); pre.style.display = 'block'; } catch (e) { fallo(e); } });
   document.querySelectorAll('[data-anular]').forEach(b => b.onclick = async () => {
     if (b.dataset.ok !== '1') { b.dataset.ok = '1'; b.textContent = '¿Seguro?'; return; }
     try { await api(`/api/ventas/${b.dataset.anular}/anular`, 'POST'); toast('Venta anulada, el stock volvió'); render(); } catch (e) { fallo(e); }
@@ -164,14 +192,15 @@ async function vender() {
   const q = (S.qv || '').toLowerCase();
   const res = q ? S.productos.filter(p => (p.nombre + ' ' + p.sku + ' ' + p.codigo_barras).toLowerCase().includes(q)).slice(0, 12) : [];
   const total = S.carrito.reduce((a, i) => a + i.precio * i.cantidad, 0);
-  $('#vista').innerHTML = `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+  $('#vista').innerHTML = `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))">
   <div class="card"><h2>Buscar producto</h2><input id="qv" placeholder="Nombre, SKU o código de barras" value="${esc(S.qv || '')}" autofocus>
     <div style="margin-top:8px">${res.map(p => `<button style="display:flex;justify-content:space-between;width:100%;margin-bottom:6px;text-align:left" data-add="${p.id}"><span>${esc(p.nombre)}<br><span class="tiny mut">${p.controla_stock ? 'stock ' + fq(p.stock) : 'sin límite'}</span></span><b>${fmt(p.precio)}</b></button>`).join('')}</div></div>
   <div class="card"><h2>Venta</h2>${S.carrito.length ? `<table><tbody>${S.carrito.map((i, n) => `<tr><td>${esc(i.nombre)}</td>
     <td style="width:70px"><input type="number" min="1" step="1" value="${i.cantidad}" data-cant="${n}"></td><td class="r">${fmt(i.precio * i.cantidad)}</td><td><button class="small" data-quitar="${n}">✕</button></td></tr>`).join('')}</tbody></table>
     <form class="form" id="fVenta" style="margin-top:12px"><label>Medio de pago<select id="medio"><option>Efectivo</option><option>Transferencia</option><option>Mercado Pago</option><option>Débito</option><option>Crédito</option></select></label>
     <label>Descuento ($)<input id="desc" type="number" min="0" step="0.01" value="0"></label><label>Cliente (opcional)<input id="cli"></label>
-    <div><div style="font-size:20px;margin-bottom:6px"><b>${fmt(total)}</b></div><button class="pri">Cobrar</button></div></form>` : '<p class="mut">Buscá un producto y tocá para agregarlo. El stock se descuenta acá y en Tiendanube.</p>'}</div></div>`;
+    <label>Teléfono (opcional)<input id="tel" inputmode="tel"></label><label>Email (opcional)<input id="mail" type="email"></label><label>Nota (opcional)<input id="nota" placeholder="Ej: retiró en mano"></label>
+    <div><div style="font-size:20px;margin-bottom:6px"><b>${fmt(total)}</b></div><button class="pri">Cobrar</button></div></form>` : '<p class="mut">Para ventas por fuera de la web (WhatsApp, en mano). Buscá un producto y tocá para agregarlo. El stock baja acá y en Tiendanube. Si cargás el teléfono o email, el cliente queda en Clientes.</p>'}</div></div>`;
   const qi = $('#qv'); qi.oninput = () => { S.qv = qi.value; clearTimeout(qi.t); qi.t = setTimeout(() => vender().then(() => { const n = $('#qv'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 200); };
   document.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { const p = S.productos.find(x => x.id === +b.dataset.add); const ya = S.carrito.find(i => i.producto_id === p.id); if (ya) ya.cantidad++; else S.carrito.push({ producto_id: p.id, nombre: p.nombre, precio: p.precio, cantidad: 1 }); if (p.controla_stock && (ya ? ya.cantidad : 1) > p.stock) toast('Ojo: quedan ' + fq(p.stock)); S.qv = ''; vender(); });
   document.querySelectorAll('[data-quitar]').forEach(b => b.onclick = () => { S.carrito.splice(+b.dataset.quitar, 1); vender(); });
@@ -179,9 +208,121 @@ async function vender() {
   if ($('#fVenta')) $('#fVenta').onsubmit = async ev => {
     ev.preventDefault();
     try {
-      const v = await api('/api/ventas', 'POST', { items: S.carrito.map(i => ({ producto_id: i.producto_id, cantidad: i.cantidad, precio: i.precio })), medio_pago: $('#medio').value, descuento: Number($('#desc').value || 0), cliente: $('#cli').value.trim() });
+      const v = await api('/api/ventas', 'POST', { items: S.carrito.map(i => ({ producto_id: i.producto_id, cantidad: i.cantidad, precio: i.precio })), medio_pago: $('#medio').value, descuento: Number($('#desc').value || 0), cliente: $('#cli').value.trim(), telefono: $('#tel').value.trim(), email: $('#mail').value.trim(), nota: $('#nota').value.trim() });
       S.carrito = []; S.productos = null; toast('Venta registrada: ' + fmt(v.total)); vender();
     } catch (e) { fallo(e); }
+  };
+}
+
+// ---------- Balances
+function periodo() {
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const t = S.per || 'mes', mañana = new Date(hoy); mañana.setDate(hoy.getDate() + 1);
+  if (t === 'mes') return [new Date(hoy.getFullYear(), hoy.getMonth(), 1), mañana, 'Este mes'];
+  if (t === 'mesant') return [new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1), new Date(hoy.getFullYear(), hoy.getMonth(), 1), 'Mes pasado'];
+  if (t === '7') { const d = new Date(hoy); d.setDate(d.getDate() - 6); return [d, mañana, 'Últimos 7 días']; }
+  if (t === '30') { const d = new Date(hoy); d.setDate(d.getDate() - 29); return [d, mañana, 'Últimos 30 días']; }
+  if (t === 'año') return [new Date(hoy.getFullYear(), 0, 1), mañana, 'Este año'];
+  if (t === 'todo') return [new Date(2020, 0, 1), mañana, 'Desde el principio'];
+  const d = S.perDesde ? new Date(S.perDesde + 'T00:00') : hoy, h = S.perHasta ? new Date(S.perHasta + 'T00:00') : hoy; h.setDate(h.getDate() + 1);
+  return [d, h, 'Elegido'];
+}
+const cambio = (a, b) => { const p = pct(a, b); return p === null ? '' : `<small class="${p >= 0 ? 'ok' : 'bad'}" style="color:var(--${p >= 0 ? 'ok' : 'bad'})">${p >= 0 ? '▲' : '▼'} ${Math.abs(p)}% vs. período anterior</small>`; };
+async function balances() {
+  const [d, h, nombre] = periodo();
+  const [b, movs, ps] = await Promise.all([api(`/api/balance?desde=${+d}&hasta=${+h}&tz=${TZ}`), api(`/api/plata?desde=${+d}&hasta=${+h}`), S.productos ? S.productos : api('/api/productos')]);
+  S.productos = ps; S.compra = S.compra || [];
+  const maxDia = Math.max(1, ...b.por_dia.map(x => x.ingresos));
+  const tabla = (filas, cols) => filas.length ? `<div class="tablebox"><table><thead><tr>${cols.map(c => `<th class="${c[2] || ''}">${c[0]}</th>`).join('')}</tr></thead><tbody>${filas.map(f => `<tr>${cols.map(c => `<td class="${c[2] || ''}">${c[1](f)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="mut">Sin datos en este período.</p>';
+  $('#vista').innerHTML = `
+  <div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Balance · ${nombre}</h2>
+    <div class="row"><select id="per" style="width:auto">${[['mes', 'Este mes'], ['mesant', 'Mes pasado'], ['7', 'Últimos 7 días'], ['30', 'Últimos 30 días'], ['año', 'Este año'], ['todo', 'Desde el principio'], ['elegir', 'Elegir fechas…']].map(([k, n]) => `<option value="${k}"${(S.per || 'mes') === k ? ' selected' : ''}>${n}</option>`).join('')}</select>
+    ${S.per === 'elegir' ? `<input type="date" id="pd" value="${S.perDesde || ''}" style="width:auto"><input type="date" id="ph" value="${S.perHasta || ''}" style="width:auto">` : ''}</div></div>
+    <p class="tiny mut" style="margin:6px 0 0">${d.toLocaleDateString('es-AR')} al ${new Date(+h - 1).toLocaleDateString('es-AR')}</p></div>
+  <div class="grid">
+    <div class="card stat"><small>Ventas</small><b>${fmt(b.ingresos)}</b><small>${b.ventas} venta(s) · ticket promedio ${fmt(b.ticket_promedio)}</small>${cambio(b.ingresos, b.anterior.ingresos)}</div>
+    <div class="card stat"><small>Ganancia bruta</small><b>${fmt(b.ganancia_bruta)}</b><small>margen ${b.margen}%</small></div>
+    <div class="card stat"><small>Gastos</small><b>${fmt(b.gastos)}</b><small>publicidad, comisiones, etc.</small></div>
+    <div class="card stat"><small>Ganancia neta</small><b style="color:var(--${b.ganancia_neta >= 0 ? 'ok' : 'bad'})">${fmt(b.ganancia_neta)}</b>${cambio(b.ganancia_neta, b.anterior.ganancia_neta)}</div>
+  </div>
+  ${b.lineas_sin_costo || b.stock.productos_sin_costo ? `<div class="card"><span class="tag warn">Ojo</span> ${b.lineas_sin_costo ? `${b.lineas_sin_costo} producto(s) vendido(s) en este período no tenían costo cargado, así que la ganancia sale más alta de lo real. ` : ''}${b.stock.productos_sin_costo ? `Hay ${b.stock.productos_sin_costo} producto(s) sin costo: cargalo en <a href="#productos">Productos</a>.` : ''}</div>` : ''}
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))">
+    <div class="card"><h2>Cómo se llega a la ganancia</h2><table>
+      <tr><td>Lo que se cobró</td><td class="r">${fmt(b.ingresos)}</td></tr>
+      <tr><td class="mut">− Lo que costó la mercadería vendida</td><td class="r">−${fmt(b.costo_mercaderia)}</td></tr>
+      <tr><td class="mut">− Envíos que pagó la tienda</td><td class="r">−${fmt(b.envios)}</td></tr>
+      <tr><td><b>= Ganancia bruta</b></td><td class="r"><b>${fmt(b.ganancia_bruta)}</b></td></tr>
+      <tr><td class="mut">− Gastos</td><td class="r">−${fmt(b.gastos)}</td></tr>
+      <tr><td><b>= Ganancia neta</b></td><td class="r"><b>${fmt(b.ganancia_neta)}</b></td></tr>
+      <tr><td class="tiny mut" colspan="2">Descuentos y cupones dados: ${fmt(b.descuentos)} (ya restados de lo cobrado).</td></tr></table></div>
+    <div class="card"><h2>Inversión y mercadería</h2><table>
+      <tr><td>Compras de mercadería en el período</td><td class="r">${fmt(b.compras)}</td></tr>
+      <tr><td>Otras inversiones en el período</td><td class="r">${fmt(b.inversiones)}</td></tr>
+      <tr><td><b>Mercadería en stock hoy (a costo)</b><br><span class="tiny mut">la plata que está "parada" en el depósito</span></td><td class="r"><b>${fmt(b.stock.valor_costo)}</b></td></tr>
+      <tr><td>La misma mercadería a precio de venta</td><td class="r">${fmt(b.stock.valor_venta)}</td></tr>
+      <tr><td class="mut">Ganancia si se vende todo</td><td class="r">${fmt(b.stock.valor_venta - b.stock.valor_costo)}</td></tr>
+      <tr><td class="tiny mut" colspan="2">${fq(b.stock.unidades)} unidades en stock · ${b.stock.sin_stock} producto(s) agotado(s)</td></tr></table></div>
+  </div>
+  <div class="card"><h2>Ventas por día</h2>${tabla(b.por_dia.slice().reverse(), [['Día', x => dia(x.dia)], ['', x => `<div style="background:var(--acc);height:10px;border-radius:4px;width:${Math.max(2, x.ingresos / maxDia * 100)}%;min-width:2px"></div>`], ['Ventas', x => x.ventas, 'r'], ['Cobrado', x => fmt(x.ingresos), 'r'], ['Ganancia', x => fmt(x.ganancia), 'r']])}</div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))">
+    <div class="card"><h2>Por dónde se vendió</h2>${tabla(b.por_origen, [['Canal', x => esc(x.nombre)], ['Ventas', x => x.ventas, 'r'], ['Cobrado', x => fmt(x.ingresos), 'r'], ['Ganancia', x => fmt(x.ganancia), 'r']])}</div>
+    <div class="card"><h2>Por medio de pago</h2>${tabla(b.por_medio_pago, [['Medio', x => esc(x.nombre)], ['Ventas', x => x.ventas, 'r'], ['Cobrado', x => fmt(x.ingresos), 'r']])}</div>
+  </div>
+  <div class="card"><h2>Productos que más se vendieron</h2>${tabla(b.productos, [['Producto', x => esc(x.nombre)], ['Unidades', x => fq(x.unidades), 'r'], ['Cobrado', x => fmt(x.ingresos), 'r'], ['Ganancia', x => fmt(x.ganancia), 'r']])}</div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))">
+    <div class="card"><h2>Cargar gasto o inversión</h2><form class="form" id="fPlata">
+      <label>Tipo<select id="pl_tipo"><option value="gasto">Gasto</option><option value="inversion">Inversión</option></select></label>
+      <label>Categoría<input id="pl_cat" list="cats" placeholder="Publicidad"><datalist id="cats">${['Publicidad', 'Comisión Mercado Pago', 'Plan Tiendanube', 'Envíos', 'Embalaje', 'Sueldos', 'Impuestos', 'Alquiler', 'Servicios', 'Otros'].map(x => `<option>${x}</option>`).join('')}</datalist></label>
+      <label>Detalle<input id="pl_con" required placeholder="Ej: campaña de Instagram"></label>
+      <label>Monto<input id="pl_monto" type="number" min="0.01" step="0.01" required></label>
+      <label>Fecha<input id="pl_fecha" type="date"></label>
+      <div><button class="pri">Guardar</button></div></form>
+      <p class="tiny mut">Gasto: lo que se va todos los meses (publicidad, comisiones, el plan de Tiendanube). Inversión: algo que queda (estantería, máquina, fotos de producto). La mercadería se carga al lado, en Compras.</p></div>
+    <div class="card"><h2>Cargar compra de mercadería</h2><form id="fCompra">
+      ${S.compra.length ? `<table class="tiny">${S.compra.map((l, n) => `<tr><td>${esc(l.nombre)}</td><td class="r">${fq(l.cantidad)} × ${fmt(l.costo_unitario)}</td><td><button type="button" class="small" data-qc="${n}">✕</button></td></tr>`).join('')}</table>` : ''}
+      <div class="form"><label>Producto<select id="co_p"><option value="">Elegir…</option>${ps.map(x => `<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select></label>
+      <label>Cantidad<input id="co_c" type="number" min="1" step="1"></label><label>Costo por unidad<input id="co_u" type="number" min="0" step="0.01"></label>
+      <div><button type="button" id="co_add">Agregar</button></div></div>
+      <div class="form" style="margin-top:10px"><label>Proveedor<input id="co_prov"></label><label>Flete, aduana, etc. ($)<input id="co_extra" type="number" min="0" step="0.01" value="0"></label><label>Fecha<input id="co_fecha" type="date"></label>
+      <div><button class="pri"${S.compra.length ? '' : ' disabled'}>Guardar compra</button></div></div></form>
+      <p class="tiny mut">Suma el stock (acá y en Tiendanube) y recalcula el costo de cada producto con el promedio. El flete se reparte entre los productos.</p></div>
+  </div>
+  <div class="card"><h2>Gastos, inversiones y compras del período</h2>${tabla(movs, [['Fecha', x => `<span class="tiny">${fecha(x.ts)}</span>`], ['Tipo', x => `<span class="tag${x.tipo === 'gasto' ? ' warn' : ''}">${{ gasto: 'Gasto', inversion: 'Inversión', compra: 'Compra' }[x.tipo]}</span>${x.anulado ? ' <span class="tag bad">anulado</span>' : ''}`], ['Detalle', x => esc([x.categoria !== 'Mercadería' && x.categoria, x.concepto].filter(Boolean).join(' · ')) + (x.items.length ? `<div class="tiny mut">${x.items.map(i => `${fq(i.cantidad)} × ${esc(i.nombre)} a ${fmt(i.costo_unitario)}`).join('<br>')}</div>` : '')], ['Monto', x => fmt(x.monto), 'r'], ['', x => x.anulado ? '' : `<button class="small" data-anp="${x.id}">Anular</button>`]])}</div>`;
+  $('#per').onchange = () => { S.per = $('#per').value; balances(); };
+  if ($('#pd')) { $('#pd').onchange = () => { S.perDesde = $('#pd').value; balances(); }; $('#ph').onchange = () => { S.perHasta = $('#ph').value; balances(); }; }
+  const aMs = v => v ? +new Date(v + 'T12:00') : undefined;
+  $('#fPlata').onsubmit = async ev => { ev.preventDefault(); try { await api('/api/plata', 'POST', { tipo: $('#pl_tipo').value, categoria: $('#pl_cat').value.trim(), concepto: $('#pl_con').value.trim(), monto: Number($('#pl_monto').value), fecha_ms: aMs($('#pl_fecha').value) }); toast('Guardado'); balances(); } catch (e) { fallo(e); } };
+  $('#co_add').onclick = () => { const id = +$('#co_p').value, c = Number($('#co_c').value), u = Number($('#co_u').value); if (!id || !(c > 0) || !($('#co_u').value !== '')) return toast('Elegí producto, cantidad y costo'); S.compra.push({ producto_id: id, nombre: ps.find(x => x.id === id).nombre, cantidad: c, costo_unitario: u }); balances(); };
+  document.querySelectorAll('[data-qc]').forEach(x => x.onclick = () => { S.compra.splice(+x.dataset.qc, 1); balances(); });
+  $('#fCompra').onsubmit = async ev => { ev.preventDefault(); try { const r = await api('/api/compras', 'POST', { items: S.compra.map(({ producto_id, cantidad, costo_unitario }) => ({ producto_id, cantidad, costo_unitario })), proveedor: $('#co_prov').value.trim(), extra: Number($('#co_extra').value || 0), fecha_ms: aMs($('#co_fecha').value) }); S.compra = []; S.productos = null; toast('Compra guardada: ' + fmt(r.monto)); balances(); } catch (e) { fallo(e); } };
+  document.querySelectorAll('[data-anp]').forEach(x => x.onclick = async () => { if (x.dataset.ok !== '1') { x.dataset.ok = '1'; x.textContent = '¿Seguro?'; return; } try { await api(`/api/plata/${x.dataset.anp}/anular`, 'POST'); S.productos = null; toast('Anulado'); balances(); } catch (e) { fallo(e); } });
+}
+
+// ---------- Clientes
+async function clientes() {
+  const cs = await api('/api/clientes');
+  const q = (S.qCli || '').toLowerCase();
+  const lista = cs.filter(c => !q || [c.nombre, c.email, c.telefono, c.ciudad, c.documento].join(' ').toLowerCase().includes(q));
+  const total = cs.reduce((a, c) => a + c.total, 0), repiten = cs.filter(c => c.compras > 1).length;
+  $('#vista').innerHTML = `<div class="grid">
+    <div class="card stat"><small>Clientes</small><b>${cs.length}</b><small>con nombre, teléfono o email</small></div>
+    <div class="card stat"><small>Volvieron a comprar</small><b>${repiten}</b><small>${cs.length ? Math.round(repiten / cs.length * 100) : 0}% del total</small></div>
+    <div class="card stat"><small>Gasto promedio por cliente</small><b>${fmt(cs.length ? total / cs.length : 0)}</b><small>sumando todas sus compras</small></div></div>
+  <div class="card"><div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Clientes</h2>
+    <div class="row"><input id="qCli" placeholder="Buscar nombre, teléfono, ciudad…" style="max-width:260px" value="${esc(S.qCli || '')}"><button id="csv">Descargar lista</button></div></div>
+  ${lista.length ? `<div class="tablebox"><table><thead><tr><th>Cliente</th><th>Contacto</th><th>Ciudad</th><th class="r">Compras</th><th class="r">Total</th><th>Última compra</th></tr></thead><tbody>
+  ${lista.map(c => `<tr><td><details><summary><b>${esc(c.nombre || '(sin nombre)')}</b>${c.compras > 1 ? ' <span class="tag ok">repite</span>' : ''}</summary>
+      <ul class="tiny">${c.ventas.map(v => `<li>${fecha(v.ts)} · ${v.origen === 'web' ? 'Web #' + esc(v.numero) : 'Por fuera'} · <b>${fmt(v.total)}</b><br><span class="mut">${v.items.map(esc).join(', ')}</span></li>`).join('')}</ul>
+      ${c.documento ? `<div class="tiny mut">DNI/CUIT ${esc(c.documento)}</div>` : ''}<div class="tiny mut">Cliente desde ${fecha(c.primera)} · promedio ${fmt(c.promedio)} por compra</div></details></td>
+    <td class="tiny">${c.telefono ? `<a href="https://wa.me/${esc(String(c.telefono).replace(/\D/g, ''))}" target="_blank" rel="noopener">${esc(c.telefono)}</a><br>` : ''}${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''}</td>
+    <td class="tiny">${esc([c.ciudad, c.provincia].filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(', '))}</td>
+    <td class="r">${c.compras}</td><td class="r">${fmt(c.total)}</td><td class="tiny">${fecha(c.ultima)}<br>${c.origenes.map(o => o === 'web' ? '<span class="tag ok">web</span>' : '<span class="tag">por fuera</span>').join(' ')}</td></tr>`).join('')}
+  </tbody></table></div>` : '<div class="vacio">Todavía no hay clientes. Aparecen solos con cada venta web, o cuando cargás nombre, teléfono o email en una venta por fuera.</div>'}</div>`;
+  const qi = $('#qCli'); qi.oninput = () => { S.qCli = qi.value; clearTimeout(qi.t); qi.t = setTimeout(() => clientes().then(() => { const n = $('#qCli'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }), 250); };
+  $('#csv').onclick = () => {
+    const filas = [['Nombre', 'Email', 'Teléfono', 'DNI/CUIT', 'Ciudad', 'Provincia', 'Compras', 'Total', 'Primera compra', 'Última compra']].concat(cs.map(c => [c.nombre, c.email, c.telefono, c.documento, c.ciudad, c.provincia, c.compras, c.total, new Date(c.primera).toLocaleDateString('es-AR'), new Date(c.ultima).toLocaleDateString('es-AR')]));
+    const csv = '﻿' + filas.map(f => f.map(x => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(';')).join('\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'clientes.csv'; a.click(); URL.revokeObjectURL(a.href);
   };
 }
 

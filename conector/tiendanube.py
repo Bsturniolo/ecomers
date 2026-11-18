@@ -15,7 +15,8 @@ URL_API = "https://api.tiendanube.com/2025-03"
 URL_TOKEN = "https://www.tiendanube.com/apps/authorize/token"
 
 # Avisos que pedimos a Tiendanube al instalar la app.
-EVENTOS = ("order/paid", "order/cancelled", "app/uninstalled")
+# order/updated y order/fulfilled sirven para tener al día el estado del envío de cada venta.
+EVENTOS = ("order/paid", "order/cancelled", "order/updated", "order/fulfilled", "app/uninstalled")
 
 
 def url_instalar(app_id: str, estado: str) -> str:

@@ -76,7 +76,28 @@ CREATE TABLE IF NOT EXISTS avisos (
   procesado_ts INTEGER
 );
 CREATE INDEX IF NOT EXISTS avisos_estado ON avisos (estado);
+CREATE TABLE IF NOT EXISTS plata (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,
+  tipo TEXT NOT NULL CHECK (tipo IN ('compra','gasto','inversion')),
+  categoria TEXT NOT NULL DEFAULT '',
+  concepto TEXT NOT NULL DEFAULT '',
+  monto REAL NOT NULL,
+  items TEXT NOT NULL DEFAULT '[]',       -- JSON: productos de una compra de mercadería
+  anulado INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ventas_ts ON ventas (ts);
+CREATE INDEX IF NOT EXISTS plata_ts ON plata (ts);
 """
+
+# Columnas agregadas después de la primera versión: se suman solas a una base vieja.
+COLUMNAS_NUEVAS = {
+    "ventas": {
+        "detalle": "TEXT NOT NULL DEFAULT '{}'",    # JSON: horarios, envío, pago, cupones, notas
+        "pedido_tn": "TEXT NOT NULL DEFAULT ''",    # JSON: el pedido completo tal como lo mandó Tiendanube
+        "envio_costo": "REAL NOT NULL DEFAULT 0",   # lo que paga la tienda por el envío
+    },
+}
 
 
 def ahora_ms() -> int:
@@ -90,6 +111,11 @@ class Base:
         self.con.execute("PRAGMA foreign_keys = ON")
         self.con.execute("PRAGMA journal_mode = WAL")
         self.con.executescript(ESQUEMA)
+        for tabla, cols in COLUMNAS_NUEVAS.items():
+            hay = {f["name"] for f in self.con.execute(f"PRAGMA table_info({tabla})")}
+            for col, tipo in cols.items():
+                if col not in hay:
+                    self.con.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {tipo}")
         # Un solo lock para todo: las operaciones son cortas y así nunca se pisan dos cambios de stock.
         self.lock = threading.RLock()
 
@@ -162,7 +188,8 @@ class _Transaccion:
 def fila(f) -> dict:
     """Fila de SQLite a dict, abriendo los campos JSON."""
     d = dict(f)
-    for k in ("items", "cliente"):
+    d.pop("pedido_tn", None)  # el pedido crudo es pesado: se pide aparte
+    for k in ("items", "cliente", "detalle"):
         if k in d and isinstance(d[k], str):
             d[k] = json.loads(d[k])
     return d
