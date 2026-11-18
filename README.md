@@ -18,7 +18,7 @@ Toma lo que servía de [MILENIUM-2](https://github.com/Bsturniolo/MILENIUM-2) (s
 | Datos de cada venta web | Horario del pedido y del pago, productos y variantes, envío (método, dirección, seguimiento, estado), pago (tarjeta, cuotas, N° de operación), cupones, DNI y notas. El pedido completo de Tiendanube queda guardado |
 | Balances | Por período: ventas, costo de la mercadería, envíos, gastos, ganancia bruta y neta, margen, comparación con el período anterior, ventas por día, por canal y por medio de pago, productos más vendidos y valor del stock. Se cargan gastos, inversiones y compras de mercadería (suman stock y recalculan el costo) |
 | Clientes | Lista armada sola con las ventas web y las de afuera: contacto, ciudad, compras, total gastado, quién repite. Se descarga como planilla |
-| Panel | `/panel`: inicio, ventas, productos, vender, balances, clientes, conexión. Funciona en el celular |
+| Panel | `/panel`: inicio, ventas, productos, vender, balances, clientes, conexión. Funciona en el celular. Se viste solo según la fecha (Navidad, Día de los Muertos, Mundial, tu cumple); se cambia en "Temas y fechas" |
 
 Lo que **no** hace (todavía): facturación electrónica, varias sucursales de stock, cuentas corrientes con proveedores, comisión de Mercado Pago automática (se carga como gasto).
 
