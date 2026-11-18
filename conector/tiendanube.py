@@ -44,8 +44,11 @@ class ErrorTiendanube(Exception):
 def canjear_codigo(app_id: str, secreto_app: str, codigo: str, http: httpx.Client | None = None) -> dict:
     """Cambia el código que manda Tiendanube al instalar por la llave de acceso (no vence)."""
     cliente = http or httpx.Client(timeout=20)
-    r = cliente.post(URL_TOKEN, json={"client_id": app_id, "client_secret": secreto_app,
-                                      "grant_type": "authorization_code", "code": codigo})
+    try:
+        r = cliente.post(URL_TOKEN, json={"client_id": app_id, "client_secret": secreto_app,
+                                          "grant_type": "authorization_code", "code": codigo})
+    except httpx.HTTPError as e:
+        raise ErrorTiendanube(f"No se pudo conectar con Tiendanube (¿hay internet?): {e}")
     datos = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
     if r.status_code != 200 or "access_token" not in datos:
         raise ErrorTiendanube(f"Tiendanube no aceptó el código ({r.status_code}): {datos.get('error_description') or r.text[:200]}", r.status_code)
@@ -69,7 +72,10 @@ class API:
 
     def _pedir(self, metodo: str, ruta: str, **kw) -> httpx.Response:
         for intento in range(4):
-            r = self.http.request(metodo, self.base + ruta, headers=self.headers, **kw)
+            try:
+                r = self.http.request(metodo, self.base + ruta, headers=self.headers, **kw)
+            except httpx.HTTPError as e:
+                raise ErrorTiendanube(f"No se pudo conectar con Tiendanube (¿hay internet?): {e}")
             if r.status_code == 429 and intento < 3:  # límite de pedidos: esperar y reintentar
                 time.sleep(min(float(r.headers.get("x-rate-limit-reset", "1000")) / 1000, 5))
                 continue
@@ -80,6 +86,22 @@ class API:
 
     def pedido(self, pedido_id: int) -> dict:
         return self._pedir("GET", f"/orders/{int(pedido_id)}").json()
+
+    def pedidos_desde(self, desde_iso: str) -> list[dict]:
+        """Todos los pedidos creados o cambiados desde esa fecha (de a 200 por página, los más viejos primero)."""
+        todos, pagina = [], 1
+        while True:
+            try:
+                lote = self._pedir("GET", "/orders", params={"updated_at_min": desde_iso, "per_page": 200, "page": pagina}).json()
+            except ErrorTiendanube as e:
+                if e.status == 404:  # Tiendanube responde 404 cuando no hay (más) resultados
+                    break
+                raise
+            todos.extend(lote)
+            if len(lote) < 200 or pagina >= 100:
+                break
+            pagina += 1
+        return sorted(todos, key=lambda p: (str(p.get("updated_at") or ""), int(p.get("id") or 0)))
 
     def productos(self) -> list[dict]:
         """Todos los productos con sus variantes (de a 200 por página)."""

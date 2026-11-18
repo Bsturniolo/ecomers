@@ -9,7 +9,7 @@ Toma lo que servía de [MILENIUM-2](https://github.com/Bsturniolo/MILENIUM-2) (s
 | Parte | Qué hace |
 | --- | --- |
 | Instalación | La clienta acepta la app en Tiendanube y el conector queda conectado. Pide los avisos de venta y trae todos los productos (cada variante con su SKU) |
-| Ventas web | Tiendanube avisa cuando un pedido queda **pagado**. El conector busca el pedido, registra la venta (productos, envío, descuento, medio de pago, cliente) y descuenta el stock. Si el pedido se **cancela**, anula la venta y devuelve el stock |
+| Ventas web | La app le pide a Tiendanube los pedidos pagados al abrirse y cada 2 minutos (funciona sin servidor). Con servidor, además Tiendanube avisa cuando un pedido queda **pagado**. El conector busca el pedido, registra la venta (productos, envío, descuento, medio de pago, cliente) y descuenta el stock. Si el pedido se **cancela**, anula la venta y devuelve el stock |
 | Sin duplicados | Si Tiendanube manda el mismo aviso varias veces, la venta cuenta una sola vez |
 | Si algo falla | El aviso queda guardado y se reintenta solo cada minuto. Después de 12 intentos queda marcado en el panel |
 | Productos sin SKU | Si se vende algo que no se reconoce, la venta entra igual pero queda marcada **para revisar** |
@@ -26,7 +26,11 @@ Lo que **no** hace (todavía): facturación electrónica, varias sucursales de s
 
 Paso a paso en **[docs/PASOS.md](docs/PASOS.md)**: crear la app en Tiendanube Partners, subir el servidor y conectar la tienda.
 
-## Probarlo en la compu
+## Usarlo sin servidor
+
+Doble clic en `iniciar.bat` (Windows) o `./iniciar.sh` (Linux/Mac). La app trae sola las ventas de Tiendanube al abrirse y cada 2 minutos. Detalle en [docs/PASOS.md](docs/PASOS.md).
+
+## Probarlo en la compu (desarrollo)
 
 ```bash
 pip install -r requirements-dev.txt

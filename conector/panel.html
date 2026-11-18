@@ -328,23 +328,38 @@ async function clientes() {
 
 // ---------- Conexión con Tiendanube
 async function conexion() {
-  const [e, avs] = await Promise.all([api('/api/estado'), api('/api/avisos?limite=30')]);
+  const [e, avs] = await Promise.all([api('/api/estado?tz=' + TZ), api('/api/avisos?limite=30')]);
+  const hace = ms => { if (!ms) return 'nunca'; const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? 'recién' : m < 60 ? `hace ${m} min` : fecha(ms); };
   $('#vista').innerHTML = `<div class="card"><h2>Tiendanube</h2>
     <p>${e.conectada ? `<span class="tag ok">Conectada</span> Tienda N° ${esc(e.tienda_id)}` : '<span class="tag bad">Sin conectar</span>'}</p>
-    ${!e.configurada ? '<p class="tag warn">Faltan los datos de la app (TN_APP_ID y TN_APP_SECRETO) en el servidor. Ver docs/PASOS.md.</p>' : ''}
-    ${e.url_avisos ? `<p class="tiny mut">Tiendanube avisa las ventas a: ${esc(e.url_avisos)}</p>` : '<p class="tiny mut">Falta URL_PUBLICA en el servidor.</p>'}
-    <p class="tiny mut">Productos traídos por última vez: ${fecha(e.ultima_importacion)}</p>
+    ${!e.configurada ? '<p class="tag warn">Faltan los datos de la app (TN_APP_ID y TN_APP_SECRETO). Ver docs/PASOS.md.</p>' : ''}
+    ${e.conectada ? `<p>Ventas traídas de Tiendanube: <b>${hace(e.ultima_traida)}</b>. <span class="mut">La app las busca sola al prenderse y cada ${e.traer_cada_min} min mientras está abierta.</span></p>
+      ${e.error_traer ? `<p><span class="tag bad">No se pudo traer</span> <span class="tiny">${esc(e.error_traer)}</span></p>` : ''}` : ''}
+    <p class="tiny mut">${e.con_avisos ? 'Con servidor: además, Tiendanube avisa cada venta al instante a ' + esc(e.url_avisos) + '.' : 'Sin servidor: la app trae las ventas cuando está prendida. Si estuvo apagada, al prenderla se pone al día.'}
+      Productos traídos por última vez: ${fecha(e.ultima_importacion)}.</p>
     <div class="row">
+      ${e.conectada ? '<button class="pri" id="bTraer">Traer ventas ahora</button>' : ''}
       ${e.configurada ? `<button class="${e.conectada ? '' : 'pri'}" id="bInstalar">${e.conectada ? 'Volver a conectar' : 'Conectar la tienda'}</button>` : ''}
       ${e.conectada ? `<button id="bImportar">Traer productos de Tiendanube</button><button id="bRevisar">Revisar conexión</button><button id="bDif">Comparar stock</button>` : ''}
       <button id="bSimular">Simular venta web</button>
-    </div><div id="dif" style="margin-top:12px"></div></div>
-  <div class="card"><h2>Últimos avisos de Tiendanube</h2>${avs.length ? `<div class="tablebox"><table><thead><tr><th>Llegó</th><th>Aviso</th><th>Estado</th><th></th></tr></thead><tbody>
+    </div>
+    <div id="pegar" style="display:none;margin-top:14px" class="card">
+      <p style="margin-top:0"><b>Se abrió Tiendanube en otra pestaña.</b> Aceptá la app ahí. Si después ves una página que dice "listo", ya está. Si ves un error o una página que no carga, <b>copiá la dirección completa</b> de esa pestaña (la que tiene <code>code=</code>) y pegala acá:</p>
+      <div class="row"><input id="codigo" placeholder="http://localhost:8000/tiendanube/instalada?code=…" style="flex:1;min-width:200px"><button class="pri" id="bCodigo">Conectar</button></div></div>
+    ${e.conectada ? `<details style="margin-top:14px"><summary class="tiny">Traer ventas desde una fecha (por ejemplo, para cargar meses anteriores)</summary>
+      <div class="row" style="margin-top:8px"><input type="date" id="desdeF" style="width:auto"><button id="bTraerDesde">Traer</button></div>
+      <p class="tiny mut">Las ventas de antes de conectar la tienda se cargan para los reportes, pero no tocan el stock (Tiendanube ya las tenía descontadas).</p></details>` : ''}
+    <div id="dif" style="margin-top:12px"></div></div>
+  ${!e.con_avisos && !avs.length ? '' : `<div class="card"><h2>Últimos avisos de Tiendanube</h2>${avs.length ? `<div class="tablebox"><table><thead><tr><th>Llegó</th><th>Aviso</th><th>Estado</th><th></th></tr></thead><tbody>
     ${avs.map(a => `<tr><td class="tiny">${fecha(a.recibido_ts)}</td><td>${esc(a.evento)} ${a.recurso_id ? '<span class="mut">' + esc(a.recurso_id) + '</span>' : ''}</td>
     <td><span class="tag ${a.estado === 'hecho' ? 'ok' : a.estado === 'ignorado' ? '' : 'warn'}">${esc(a.estado)}</span>${a.ultimo_error ? `<div class="tiny mut">${esc(a.ultimo_error)}</div>` : ''}</td>
-    <td>${a.estado === 'error' ? `<button class="small" data-re="${a.id}">Reintentar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="mut">Todavía no llegó ningún aviso.</p>'}</div>`;
+    <td>${a.estado === 'error' ? `<button class="small" data-re="${a.id}">Reintentar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="mut">Todavía no llegó ningún aviso.</p>'}</div>`}`;
   const on = (id, fn) => { const b = $(id); if (b) b.onclick = async () => { b.disabled = true; try { await fn(); } catch (e) { fallo(e); } b.disabled = false; }; };
-  on('#bInstalar', async () => { const r = await api('/api/instalar', 'POST'); location.href = r.url; });
+  on('#bInstalar', async () => { const r = await api('/api/instalar', 'POST'); if (e.con_avisos) { location.href = r.url; return; } window.open(r.url, '_blank', 'noopener'); $('#pegar').style.display = 'block'; });
+  on('#bCodigo', async () => { const r = await api('/api/instalar/codigo', 'POST', { codigo: $('#codigo').value.trim() }); S.productos = null; toast(r.mensaje); conexion(); });
+  const traer = async desde => { const r = await api('/api/traer-pedidos', 'POST', desde ? { desde_ms: desde } : {}); S.productos = null; toast(r.ok ? `Listo: ${r.nuevas} venta(s) nueva(s)${r.anuladas ? ', ' + r.anuladas + ' cancelada(s)' : ''}` : 'Ya se estaban trayendo, probá en un ratito'); conexion(); };
+  on('#bTraer', () => traer());
+  on('#bTraerDesde', () => { const v = $('#desdeF').value; if (!v) return toast('Elegí una fecha'); return traer(+new Date(v + 'T00:00')); });
   on('#bImportar', async () => { const r = await api('/api/productos/importar', 'POST'); S.productos = null; toast(`Listo: ${r.nuevos} nuevos, ${r.actualizados} actualizados`); });
   on('#bRevisar', async () => { const r = await api('/api/revisar-conexion', 'POST'); toast(`Conexión bien. Avisos: ${r.avisos.join(', ') || 'falta URL pública'}. Stock enviado: ${r.enviados}`); });
   on('#bSimular', async () => { const r = await api('/api/simular-pedido', 'POST'); S.productos = null; toast('Venta de prueba registrada (N° ' + r.venta_id + '). Mirala en Ventas.'); });
