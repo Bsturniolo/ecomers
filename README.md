@@ -15,7 +15,10 @@ Toma lo que servía de [MILENIUM-2](https://github.com/Bsturniolo/MILENIUM-2) (s
 | Productos sin SKU | Si se vende algo que no se reconoce, la venta entra igual pero queda marcada **para revisar** |
 | Mostrador | Ventas en el local desde el panel: descuenta stock acá y en Tiendanube |
 | Stock | Ajustes con motivo, kardex por producto, aviso de stock bajo, comparar el stock con Tiendanube y corregirlo con un botón |
-| Panel | `/panel`: ventas y ganancia del día y del mes, ventas, productos (cargar costo), vender, conexión. Funciona en el celular |
+| Datos de cada venta web | Horario del pedido y del pago, productos y variantes, envío (método, dirección, seguimiento, estado), pago (tarjeta, cuotas, N° de operación), cupones, DNI y notas. El pedido completo de Tiendanube queda guardado |
+| Balances | Por período: ventas, costo de la mercadería, envíos, gastos, ganancia bruta y neta, margen, comparación con el período anterior, ventas por día, por canal y por medio de pago, productos más vendidos y valor del stock. Se cargan gastos, inversiones y compras de mercadería (suman stock y recalculan el costo) |
+| Clientes | Lista armada sola con las ventas web y las de afuera: contacto, ciudad, compras, total gastado, quién repite. Se descarga como planilla |
+| Panel | `/panel`: inicio, ventas, productos, vender, balances, clientes, conexión. Funciona en el celular |
 
 Lo que **no** hace (todavía): facturación electrónica, varias sucursales de stock, compras a proveedores.
 

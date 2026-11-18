@@ -148,7 +148,7 @@ def test_instalacion_en_otra_tienda_se_rechaza(tmp_path, tn):
 def test_instalar_trae_productos_y_pide_avisos(c, tn):
     r = conectar(c)
     assert "4 productos" in r.text
-    assert sorted(w["event"] for w in tn.webhooks) == ["app/uninstalled", "order/cancelled", "order/paid"]
+    assert sorted(w["event"] for w in tn.webhooks) == ["app/uninstalled", "order/cancelled", "order/fulfilled", "order/paid", "order/updated"]
     assert all(w["url"] == "https://tienda.ejemplo.com/tiendanube/aviso" for w in tn.webhooks)
     ps = {p["sku"]: p for p in c.get("/api/productos", headers=ADMIN).json()}
     assert ps["VENT-01"]["stock"] == 8 and ps["VENT-01"]["precio"] == 45000
@@ -156,7 +156,7 @@ def test_instalar_trae_productos_y_pide_avisos(c, tn):
     assert ps["STK"]["controla_stock"] == 0
     # Volver a revisar no duplica avisos y traer de nuevo no duplica productos
     c.post("/api/revisar-conexion", headers=ADMIN)
-    assert len(tn.webhooks) == 3
+    assert len(tn.webhooks) == 5
     assert c.post("/api/productos/importar", headers=ADMIN).json() == {"nuevos": 0, "actualizados": 4}
     assert tn.stock_enviado == []  # traer productos no le manda stock a Tiendanube
 
@@ -321,7 +321,7 @@ def test_simular_sin_tienda(c):
     c.app_.state.base.ejec("INSERT INTO productos (nombre, sku, precio, stock, modificado) VALUES ('Mate', 'MATE', 9000, 5, 0)")
     r = c.post("/api/simular-pedido", headers=ADMIN)
     assert r.status_code == 200
-    assert c.get("/api/ventas", headers=ADMIN).json()[0]["medio_pago"] == "Simulado"
+    assert c.get("/api/ventas", headers=ADMIN).json()[0]["medio_pago"] == "Mercado Pago (simulado)"
     assert prod(c, "MATE")["stock"] == 4
 
 
@@ -330,3 +330,122 @@ def test_producto_solo_aca_no_queda_pendiente_de_tiendanube(c):
     p = prod(c, "MATE")
     assert c.post("/api/ventas", json={"items": [{"producto_id": p["id"], "cantidad": 1}]}, headers=ADMIN).status_code == 200
     assert prod(c, "MATE")["stock"] == 4 and prod(c, "MATE")["sincronizado"] == 1
+
+
+# ---------------------------------------------------------------- datos completos, balance y clientes
+def pedido_completo(id_):
+    p = pedido(id_, [{"product_id": 20, "variant_id": 201, "sku": "FUN-NEG", "name": "Funda celular (Negra)", "quantity": 2,
+                      "price": "6000.00", "variant_values": ["Negra"], "image": {"src": "https://img/funda.jpg"}}])
+    p.update({
+        "created_at": "2026-11-17T20:50:00-03:00", "status": "open", "shipping_status": "unpacked", "storefront": "store",
+        "currency": "ARS", "shipping_option": "Correo Argentino - Envío a domicilio", "shipping_cost_owner": "2500.00",
+        "shipping_address": {"name": "Ana Gómez", "address": "San Martín", "number": "1234", "floor": "3B", "city": "Mendoza",
+                             "province": "Mendoza", "zipcode": "5500", "phone": "+5492615551234", "locality": "Ciudad"},
+        "payment_details": {"method": "credit_card", "credit_card_company": "visa", "installments": 3},
+        "gateway_id": "MP-998877", "coupon": [{"code": "BIENVENIDA"}], "discount_coupon": "1000.00",
+        "contact_identification": "30111222", "note": "Tocar timbre 3B", "owner_note": "",
+    })
+    return p
+
+
+def test_venta_web_guarda_todos_los_datos(c, tn):
+    conectar(c)
+    tn.pedidos[6001] = pedido_completo(6001)
+    avisar(c, "order/paid", 6001)
+    (v,) = c.get("/api/ventas", headers=ADMIN).json()
+    d = v["detalle"]
+    assert d["creado_ts"] and d["pagado_ts"] and d["pagado_ts"] > d["creado_ts"]
+    assert d["envio"]["metodo"].startswith("Correo Argentino") and d["envio"]["direccion"] == "San Martín 1234, piso/depto 3B"
+    assert d["envio"]["ciudad"] == "Mendoza" and d["envio"]["cp"] == "5500" and d["envio"]["costo_tienda"] == 2500
+    assert d["pago"] == {"plataforma": "Mercado Pago", "metodo": "credit_card", "tarjeta": "visa", "cuotas": 3, "operacion": "MP-998877"}
+    assert d["descuentos"]["cupones"] == ["BIENVENIDA"] and d["descuentos"]["cupon"] == 1000
+    assert d["nota_cliente"] == "Tocar timbre 3B" and d["estado_envio"] == "unpacked"
+    assert v["cliente"]["documento"] == "30111222" and v["cliente"]["ciudad"] == "Mendoza"
+    assert v["items"][0]["variante"] == "Negra" and v["items"][0]["imagen"] == "https://img/funda.jpg"
+    assert v["envio_costo"] == 2500 and "pedido_tn" not in v
+    crudo = c.get(f"/api/ventas/{v['id']}/pedido", headers=ADMIN).json()
+    assert crudo["gateway_id"] == "MP-998877"
+
+
+def test_pedido_actualizado_cambia_el_envio_sin_tocar_stock(c, tn):
+    conectar(c)
+    tn.pedidos[6002] = pedido_completo(6002)
+    avisar(c, "order/paid", 6002)
+    stock = prod(c, "FUN-NEG")["stock"]
+    tn.pedidos[6002].update({"shipping_status": "shipped", "shipping_tracking_number": "AR123456"})
+    avisar(c, "order/fulfilled", 6002)
+    v = c.get("/api/ventas", headers=ADMIN).json()[0]
+    assert v["detalle"]["estado_envio"] == "shipped" and v["detalle"]["envio"]["seguimiento"] == "AR123456"
+    assert prod(c, "FUN-NEG")["stock"] == stock
+    avisar(c, "order/updated", 9999)  # pedido que no es una venta registrada: se ignora
+    assert c.get("/api/avisos", headers=ADMIN).json()[0]["estado"] == "ignorado"
+
+
+def test_compra_suma_stock_promedia_costo_y_avisa(c, tn):
+    conectar(c)
+    p = prod(c, "VENT-01")  # 8 unidades
+    c.patch(f"/api/productos/{p['id']}", json={"costo": 30000}, headers=ADMIN)
+    r = c.post("/api/compras", json={"items": [{"producto_id": p["id"], "cantidad": 2, "costo_unitario": 35000}],
+                                     "proveedor": "Importadora X", "extra": 10000}, headers=ADMIN)
+    assert r.status_code == 200, r.text
+    assert r.json()["monto"] == 80000 and r.json()["tipo"] == "compra"
+    p2 = prod(c, "VENT-01")
+    assert p2["stock"] == 10
+    assert p2["costo"] == round((8 * 30000 + 2 * 40000) / 10, 2)  # flete repartido: 35000 + 5000
+    assert tn.stock_enviado[-1] == (10, {"action": "replace", "value": 10, "id": 101})
+    assert c.post(f"/api/plata/{r.json()['id']}/anular", headers=ADMIN).status_code == 200
+    assert prod(c, "VENT-01")["stock"] == 8
+
+
+def test_balance(c, tn):
+    conectar(c)
+    for sku, costo in (("FUN-NEG", 2500), ("VENT-01", 30000)):
+        c.patch(f"/api/productos/{prod(c, sku)['id']}", json={"costo": costo}, headers=ADMIN)
+    tn.pedidos[6003] = pedido_completo(6003)  # 2 fundas a 6000, envío cobrado 3000, la tienda paga 2500
+    avisar(c, "order/paid", 6003)
+    c.post("/api/ventas", json={"items": [{"producto_id": prod(c, "VENT-01")["id"], "cantidad": 1}], "medio_pago": "Efectivo"}, headers=ADMIN)
+    c.post("/api/plata", json={"tipo": "gasto", "categoria": "Publicidad", "concepto": "Instagram", "monto": 5000}, headers=ADMIN)
+    c.post("/api/plata", json={"tipo": "inversion", "concepto": "Estantería", "monto": 20000}, headers=ADMIN)
+    import time
+    ahora = int(time.time() * 1000)
+    b = c.get(f"/api/balance?desde={ahora - 86_400_000 * 30}&hasta={ahora + 60_000}", headers=ADMIN).json()
+    assert b["ventas"] == 2 and b["ingresos"] == 15000 + 45000
+    assert b["costo_mercaderia"] == 5000 + 30000 and b["envios"] == 2500
+    assert b["ganancia_bruta"] == 60000 - 35000 - 2500 and b["gastos"] == 5000
+    assert b["ganancia_neta"] == 22500 - 5000 and b["inversiones"] == 20000
+    assert {x["nombre"] for x in b["por_origen"]} == {"Tienda web", "Por fuera (mostrador)"}
+    assert b["gastos_por_categoria"] == [{"categoria": "Publicidad", "monto": 5000}]
+    assert b["productos"][0]["nombre"] == "Ventilador de pie" and b["productos"][0]["ganancia"] == 15000
+    assert b["stock"]["valor_costo"] == 7 * 30000 + 28 * 2500 and b["por_dia"] and b["anterior"]["ventas"] == 0
+    assert c.get("/api/balance?desde=10&hasta=5", headers=ADMIN).status_code == 422
+
+
+def test_clientes_juntan_web_y_por_fuera(c, tn):
+    conectar(c)
+    tn.pedidos[6004] = pedido_completo(6004)
+    avisar(c, "order/paid", 6004)
+    p = prod(c, "VENT-01")
+    c.post("/api/ventas", json={"items": [{"producto_id": p["id"], "cantidad": 1}], "cliente": "Ana", "email": "ANA@ejemplo.com"}, headers=ADMIN)
+    c.post("/api/ventas", json={"items": [{"producto_id": p["id"], "cantidad": 1}], "cliente": "Juan", "telefono": "261 555-0000"}, headers=ADMIN)
+    c.post("/api/ventas", json={"items": [{"producto_id": p["id"], "cantidad": 1}], "cliente": "Juan P", "telefono": "+54 9 261 5550000"}, headers=ADMIN)
+    cs = {x["nombre"]: x for x in c.get("/api/clientes", headers=ADMIN).json()}
+    assert cs["Ana"]["compras"] == 2 and cs["Ana"]["origenes"] == ["mostrador", "web"] and cs["Ana"]["ciudad"] == "Mendoza"
+    assert cs["Ana"]["total"] == 15000 + 45000 and cs["Ana"]["documento"] == "30111222"
+    assert cs["Juan P"]["compras"] == 2 and len(cs) == 2
+
+
+def test_base_vieja_se_actualiza_sola(tmp_path):
+    import sqlite3
+    ruta = str(tmp_path / "vieja.db")
+    con = sqlite3.connect(ruta)
+    con.executescript("CREATE TABLE ventas (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, origen TEXT NOT NULL, pedido_tn_id INTEGER UNIQUE, "
+                      "pedido_numero TEXT NOT NULL DEFAULT '', items TEXT NOT NULL, subtotal REAL DEFAULT 0, envio REAL DEFAULT 0, "
+                      "descuento REAL DEFAULT 0, total REAL NOT NULL, costo REAL DEFAULT 0, medio_pago TEXT DEFAULT '', cliente TEXT DEFAULT '{}', "
+                      "revisar INTEGER DEFAULT 0, anulada INTEGER DEFAULT 0, anulada_ts INTEGER);"
+                      "INSERT INTO ventas (ts, origen, items, total) VALUES (1, 'mostrador', '[]', 100);")
+    con.commit()
+    con.close()
+    a = conector.crear_app(ruta, admin_token=TOKEN, app_id="", secreto_app="", url_publica="", contacto="", tienda_esperada="",
+                           tareas_de_fondo=False)
+    (v,) = TestClient(a).get("/api/ventas", headers=ADMIN).json()
+    assert v["detalle"] == {} and v["envio_costo"] == 0

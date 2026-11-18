@@ -22,7 +22,7 @@ import os
 import pathlib
 import secrets
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -66,6 +66,78 @@ def texto_idioma(x) -> str:
     return str(x or "")
 
 
+def _texto(x) -> str:
+    if isinstance(x, dict):
+        return str(x.get("name") or x.get("es") or x.get("code") or "")
+    return "" if x is None else str(x)
+
+
+def detalle_pedido(p: dict) -> dict:
+    """Todo lo útil de un pedido de Tiendanube, ordenado para mostrarlo en el panel."""
+    dir_ = p.get("shipping_address") or {}
+    direccion = " ".join(x for x in (_texto(dir_.get("address")), _texto(dir_.get("number"))) if x)
+    if dir_.get("floor"):
+        direccion += f", piso/depto {dir_['floor']}"
+    pago = p.get("payment_details") or {}
+    cupones = [_texto(c.get("code") if isinstance(c, dict) else c) for c in (p.get("coupon") or [])]
+    return {
+        "creado_ts": iso_a_ms(p.get("created_at")),
+        "pagado_ts": iso_a_ms(p.get("paid_at")),
+        "enviado_ts": iso_a_ms(p.get("shipped_at")),
+        "cancelado_ts": iso_a_ms(p.get("cancelled_at")),
+        "estado": _texto(p.get("status")),
+        "estado_pago": _texto(p.get("payment_status")),
+        "estado_envio": _texto(p.get("shipping_status")),
+        "origen": _texto(p.get("storefront")),
+        "moneda": _texto(p.get("currency")),
+        "envio": {
+            "metodo": _texto(p.get("shipping_option")) or _texto(p.get("shipping")),
+            "transportista": _texto(p.get("shipping_carrier_name")),
+            "retiro": _texto(p.get("shipping_pickup_type")) == "pickup",
+            "cobrado": num(p.get("shipping_cost_customer")),
+            "costo_tienda": num(p.get("shipping_cost_owner")) if p.get("shipping_cost_owner") not in (None, "") else None,
+            "seguimiento": _texto(p.get("shipping_tracking_number")),
+            "seguimiento_url": _texto(p.get("shipping_tracking_url")),
+            "destinatario": _texto(dir_.get("name")),
+            "telefono": _texto(dir_.get("phone")),
+            "direccion": direccion,
+            "localidad": _texto(dir_.get("locality")),
+            "ciudad": _texto(dir_.get("city")),
+            "provincia": _texto(dir_.get("province")),
+            "cp": _texto(dir_.get("zipcode")),
+        },
+        "pago": {
+            "plataforma": _texto(p.get("gateway_name")) or _texto(p.get("gateway")),
+            "metodo": _texto(pago.get("method")),
+            "tarjeta": _texto(pago.get("credit_card_company")),
+            "cuotas": pago.get("installments"),
+            "operacion": _texto(p.get("gateway_id")),
+        },
+        "descuentos": {
+            "total": num(p.get("discount")),
+            "cupon": num(p.get("discount_coupon")),
+            "medio_pago": num(p.get("discount_gateway")),
+            "cupones": [c for c in cupones if c],
+        },
+        "facturacion": {
+            "nombre": _texto(p.get("billing_name")),
+            "documento": _texto(p.get("contact_identification")),
+            "direccion": " ".join(x for x in (_texto(p.get("billing_address")), _texto(p.get("billing_number"))) if x),
+            "ciudad": _texto(p.get("billing_city")),
+            "provincia": _texto(p.get("billing_province")),
+            "cp": _texto(p.get("billing_zipcode")),
+        },
+        "nota_cliente": _texto(p.get("note")),
+        "nota_tienda": _texto(p.get("owner_note")),
+    }
+
+
+def inicio_dia(ms: int, tz_min: int) -> int:
+    """Medianoche (en la hora del navegador) del día de ms. tz_min = minutos a sumar a UTC (Argentina: -180)."""
+    dia = 86_400_000
+    return (ms + tz_min * 60_000) // dia * dia - tz_min * 60_000
+
+
 # ---------------------------------------------------------------- datos que llegan del panel
 class Ajuste(BaseModel):
     stock_real: float = Field(ge=0)
@@ -88,6 +160,31 @@ class VentaMostrador(BaseModel):
     descuento: float = Field(default=0, ge=0)
     medio_pago: str = Field(default="Efectivo", min_length=1, max_length=60)
     cliente: str = Field(default="", max_length=120)
+    telefono: str = Field(default="", max_length=40)
+    email: str = Field(default="", max_length=160)
+    nota: str = Field(default="", max_length=300)
+
+
+class ItemCompra(BaseModel):
+    producto_id: int
+    cantidad: float = Field(gt=0, le=1_000_000)
+    costo_unitario: float = Field(ge=0)
+
+
+class Compra(BaseModel):
+    """Mercadería que entra: suma stock, actualiza el costo y queda como inversión."""
+    items: list[ItemCompra] = Field(min_length=1, max_length=200)
+    proveedor: str = Field(default="", max_length=120)
+    extra: float = Field(default=0, ge=0)  # flete, aduana, etc. Se reparte en el costo
+    fecha_ms: Optional[int] = None
+
+
+class MovPlata(BaseModel):
+    tipo: str = Field(pattern="^(gasto|inversion)$")
+    categoria: str = Field(default="", max_length=60)
+    concepto: str = Field(min_length=1, max_length=160)
+    monto: float = Field(gt=0)
+    fecha_ms: Optional[int] = None
 
 
 # ---------------------------------------------------------------- app
@@ -202,24 +299,34 @@ def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, a
             for it in pedido.get("products") or []:
                 p = buscar_producto(it)
                 cant = num(it.get("quantity"), 1)
+                img = it.get("image") or {}
                 items.append({"producto_id": p["id"] if p else None, "nombre": str(it.get("name") or (p and p["nombre"]) or "?"),
                               "sku": str(it.get("sku") or ""), "cantidad": cant, "precio": num(it.get("price")),
-                              "costo": p["costo"] if p else 0, "sin_producto": p is None})
+                              "costo": p["costo"] if p else 0, "sin_producto": p is None,
+                              "variante": " / ".join(texto_idioma(x) for x in (it.get("variant_values") or []) if texto_idioma(x)),
+                              "imagen": img.get("src", "") if isinstance(img, dict) else ""})
                 costo += (p["costo"] if p else 0) * cant
                 revisar = revisar or p is None
             c = pedido.get("customer") or {}
             cliente = {"nombre": str(c.get("name") or pedido.get("contact_name") or ""),
                        "email": str(c.get("email") or pedido.get("contact_email") or ""),
                        "telefono": str(c.get("phone") or pedido.get("contact_phone") or ""),
+                       "documento": str(pedido.get("contact_identification") or c.get("identification") or ""),
                        "tn_cliente_id": c.get("id")}
+            det = detalle_pedido(pedido)
+            if det["envio"]["ciudad"]:
+                cliente["ciudad"] = det["envio"]["ciudad"]
+                cliente["provincia"] = det["envio"]["provincia"]
+            # Lo que paga la tienda por el envío. Si Tiendanube no lo dice, se toma lo que pagó el cliente (pasa de largo).
+            envio_costo = det["envio"]["costo_tienda"] if det["envio"]["costo_tienda"] is not None else det["envio"]["cobrado"]
             ts = iso_a_ms(pedido.get("paid_at")) or iso_a_ms(pedido.get("created_at")) or ahora_ms()
             cur = base.ejec(
                 "INSERT INTO ventas (ts, origen, pedido_tn_id, pedido_numero, items, subtotal, envio, descuento, total, costo, "
-                "medio_pago, cliente, revisar) VALUES (?, 'web', ?,?,?,?,?,?,?,?,?,?,?)",
+                "medio_pago, cliente, revisar, detalle, pedido_tn, envio_costo) VALUES (?, 'web', ?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (ts, pid, str(pedido.get("number") or pid), json.dumps(items), num(pedido.get("subtotal")),
                  num(pedido.get("shipping_cost_customer")), num(pedido.get("discount")), num(pedido.get("total")),
                  round(costo, 2), medio or str(pedido.get("gateway_name") or pedido.get("gateway") or "Tienda web"),
-                 json.dumps(cliente), int(revisar)))
+                 json.dumps(cliente), int(revisar), json.dumps(det), json.dumps(pedido)[:200_000], envio_costo))
             venta_id = cur.lastrowid
             for i in items:
                 if i["producto_id"]:
@@ -258,6 +365,15 @@ def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, a
                 # Al cancelar, Tiendanube devuelve su stock: acá solo se devuelve el nuestro.
                 if not v or not anular_venta(v["id"], f"Pedido cancelado en Tiendanube", avisar_tienda=False):
                     estado = "ignorado"
+            elif av["evento"] in ("order/updated", "order/fulfilled"):
+                # Solo actualiza los datos (estado del envío, seguimiento, notas). El stock no se toca.
+                v = base.uno("SELECT id FROM ventas WHERE pedido_tn_id = ?", (av["recurso_id"],))
+                if not v:
+                    estado = "ignorado"
+                else:
+                    pedido = api_o_409().pedido(av["recurso_id"])
+                    base.ejec("UPDATE ventas SET detalle = ?, pedido_tn = ? WHERE id = ?",
+                              (json.dumps(detalle_pedido(pedido)), json.dumps(pedido)[:200_000], v["id"]))
             elif av["evento"] == "app/uninstalled":
                 base.borrar("token")
             else:
@@ -380,14 +496,19 @@ def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, a
     def panel():
         return FileResponse(AQUI / "panel.html", media_type="text/html", headers={"Cache-Control": "no-store"})
 
+    def inicios(tz: int) -> tuple[int, int]:
+        """(medianoche de hoy, día 1 del mes) en la hora del navegador, en ms."""
+        local = datetime.fromtimestamp((ahora_ms() + tz * 60_000) / 1000, timezone.utc)
+        hoy = local.replace(hour=0, minute=0, second=0, microsecond=0)
+        a_ms = lambda d: int(d.timestamp() * 1000) - tz * 60_000
+        return a_ms(hoy), a_ms(hoy.replace(day=1))
+
     @app.get("/api/estado", dependencies=[Depends(admin)])
-    def estado():
-        hoy = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        desde_hoy = int(hoy.timestamp() * 1000)
-        desde_mes = int(hoy.replace(day=1).timestamp() * 1000)
+    def estado(tz: int = -180):
+        desde_hoy, desde_mes = inicios(tz)
 
         def totales(desde):
-            f = base.uno("SELECT COUNT(*) n, COALESCE(SUM(total),0) total, COALESCE(SUM(total - envio - costo),0) ganancia "
+            f = base.uno("SELECT COUNT(*) n, COALESCE(SUM(total),0) total, COALESCE(SUM(total - envio_costo - costo),0) ganancia "
                          "FROM ventas WHERE anulada = 0 AND ts >= ?", (desde,))
             return dict(f)
         return {
@@ -486,10 +607,11 @@ def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, a
                 costo += p["costo"] * i.cantidad
             subtotal = round(sum(x["precio"] * x["cantidad"] for x in items), 2)
             total = round(max(subtotal - d.descuento, 0), 2)
-            cur = base.ejec("INSERT INTO ventas (ts, origen, items, subtotal, descuento, total, costo, medio_pago, cliente) "
-                            "VALUES (?, 'mostrador', ?,?,?,?,?,?,?)",
+            cur = base.ejec("INSERT INTO ventas (ts, origen, items, subtotal, descuento, total, costo, medio_pago, cliente, detalle) "
+                            "VALUES (?, 'mostrador', ?,?,?,?,?,?,?,?)",
                             (ahora_ms(), json.dumps(items), subtotal, d.descuento, total, round(costo, 2), d.medio_pago,
-                             json.dumps({"nombre": d.cliente})))
+                             json.dumps({"nombre": d.cliente.strip(), "telefono": d.telefono.strip(), "email": d.email.strip().lower()}),
+                             json.dumps({"nota_tienda": d.nota.strip()})))
             for x in items:
                 base.mover_stock(x["producto_id"], -x["cantidad"], "Venta mostrador", f"Venta {cur.lastrowid}", venta_id=cur.lastrowid)
         fondo.add_task(empujar_stock)
@@ -526,9 +648,197 @@ def crear_app(ruta_base: str | None = None, *, admin_token: str | None = None, a
         n = base.uno("SELECT COUNT(*) n FROM ventas WHERE pedido_tn_id < 0")["n"] + 1
         prods = [{"variant_id": p["tn_variante_id"], "sku": p["sku"], "name": p["nombre"], "quantity": 1, "price": p["precio"]} for p in ps]
         subtotal = sum(x["price"] for x in prods)
-        pedido = {"id": -n, "number": f"PRUEBA-{n}", "payment_status": "paid", "products": prods, "subtotal": subtotal,
-                  "shipping_cost_customer": 0, "discount": 0, "total": subtotal, "customer": {"name": "Cliente de prueba"}}
-        return registrar_venta_web(pedido, medio="Simulado")
+        import random
+        nombre, tel, ciudad = random.choice([("Ana Gómez", "2615551234", "Mendoza"), ("Juan Pérez", "2614449876", "Godoy Cruz"),
+                                             ("Lucía Funes", "2616667788", "Luján de Cuyo")])
+        envio = random.choice([0, 3500])
+        ahora = datetime.now(timezone.utc)
+        pedido = {"id": -n, "number": f"PRUEBA-{n}", "payment_status": "paid", "status": "open", "shipping_status": "unpacked",
+                  "products": prods, "subtotal": subtotal, "shipping_cost_customer": envio, "discount": 0, "total": subtotal + envio,
+                  "created_at": (ahora - timedelta(minutes=3)).isoformat(), "paid_at": ahora.isoformat(), "storefront": "store",
+                  "customer": {"name": nombre, "email": nombre.split()[0].lower() + "@ejemplo.com", "phone": tel},
+                  "shipping_option": "Retiro en el local" if not envio else "Envío a domicilio (48 hs)",
+                  "shipping_address": {"name": nombre, "address": "San Martín", "number": "1234", "city": ciudad, "province": "Mendoza",
+                                       "zipcode": "5500", "phone": tel},
+                  "payment_details": {"method": "credit_card", "credit_card_company": "visa", "installments": 3},
+                  "gateway_name": "Mercado Pago (simulado)", "gateway_id": f"SIM-{n}", "note": "Pedido de prueba"}
+        return registrar_venta_web(pedido)
+
+    @app.get("/api/ventas/{venta_id}/pedido", dependencies=[Depends(admin)])
+    def pedido_original(venta_id: int):
+        """El pedido completo tal como lo mandó Tiendanube (todos los campos)."""
+        v = base.uno("SELECT pedido_tn FROM ventas WHERE id = ?", (venta_id,))
+        if not v:
+            raise HTTPException(404, "No existe esa venta")
+        return json.loads(v["pedido_tn"]) if v["pedido_tn"] else {}
+
+    # ---------- compras de mercadería, gastos e inversiones
+    @app.post("/api/compras", dependencies=[Depends(admin)])
+    def comprar(d: Compra, fondo: BackgroundTasks):
+        """Entra mercadería: suma stock (y lo manda a Tiendanube), recalcula el costo promedio y queda como compra."""
+        ts = d.fecha_ms or ahora_ms()
+        bruto = sum(i.cantidad * i.costo_unitario for i in d.items)
+        with base.transaccion():
+            items = []
+            for i in d.items:
+                p = base.uno("SELECT * FROM productos WHERE id = ? AND activo = 1", (i.producto_id,))
+                if not p:
+                    raise HTTPException(404, f"No existe el producto {i.producto_id}")
+                # El flete/aduana se reparte según lo que pesa cada producto en la compra.
+                extra_u = (d.extra * (i.cantidad * i.costo_unitario) / bruto / i.cantidad) if bruto else d.extra / sum(x.cantidad for x in d.items)
+                costo_u = round(i.costo_unitario + extra_u, 2)
+                previo = max(p["stock"], 0) if p["controla_stock"] else 0
+                nuevo_costo = round((previo * p["costo"] + i.cantidad * costo_u) / (previo + i.cantidad), 2) if previo else costo_u
+                base.ejec("UPDATE productos SET costo = ? WHERE id = ?", (nuevo_costo, p["id"]))
+                items.append({"producto_id": p["id"], "nombre": p["nombre"], "cantidad": i.cantidad, "costo_unitario": costo_u})
+            monto = round(bruto + d.extra, 2)
+            cur = base.ejec("INSERT INTO plata (ts, tipo, categoria, concepto, monto, items) VALUES (?, 'compra', 'Mercadería', ?, ?, ?)",
+                            (ts, d.proveedor.strip() or "Compra de mercadería", monto, json.dumps(items)))
+            for x in items:
+                base.mover_stock(x["producto_id"], x["cantidad"], "Compra", f"Compra {cur.lastrowid}" + (f" · {d.proveedor}" if d.proveedor else ""), ts=ts)
+        fondo.add_task(empujar_stock)
+        return fila(base.uno("SELECT * FROM plata WHERE id = ?", (cur.lastrowid,)))
+
+    @app.post("/api/plata", dependencies=[Depends(admin)])
+    def cargar_plata(d: MovPlata):
+        cur = base.ejec("INSERT INTO plata (ts, tipo, categoria, concepto, monto) VALUES (?,?,?,?,?)",
+                        (d.fecha_ms or ahora_ms(), d.tipo, d.categoria.strip(), d.concepto.strip(), round(d.monto, 2)))
+        return fila(base.uno("SELECT * FROM plata WHERE id = ?", (cur.lastrowid,)))
+
+    @app.get("/api/plata", dependencies=[Depends(admin)])
+    def listar_plata(desde: int = 0, hasta: int = 0, limite: int = 300):
+        hasta = hasta or ahora_ms() + 86_400_000
+        return [fila(m) for m in base.q("SELECT * FROM plata WHERE ts >= ? AND ts < ? ORDER BY ts DESC, id DESC LIMIT ?",
+                                        (desde, hasta, min(max(limite, 1), 2000)))]
+
+    @app.post("/api/plata/{mov_id}/anular", dependencies=[Depends(admin)])
+    def anular_plata(mov_id: int, fondo: BackgroundTasks):
+        with base.transaccion():
+            m = base.uno("SELECT * FROM plata WHERE id = ?", (mov_id,))
+            if not m:
+                raise HTTPException(404, "No existe ese movimiento")
+            if m["anulado"]:
+                raise HTTPException(409, "Ya estaba anulado")
+            base.ejec("UPDATE plata SET anulado = 1 WHERE id = ?", (mov_id,))
+            for x in json.loads(m["items"]):  # una compra anulada saca la mercadería que había sumado
+                base.mover_stock(x["producto_id"], -x["cantidad"], "Anulación", f"Anula compra {mov_id}")
+        fondo.add_task(empujar_stock)
+        return fila(base.uno("SELECT * FROM plata WHERE id = ?", (mov_id,)))
+
+    # ---------- balance
+    @app.get("/api/balance", dependencies=[Depends(admin)])
+    def balance(desde: int, hasta: int, tz: int = -180):
+        """Resumen del negocio entre desde y hasta (ms). Incluye el período anterior del mismo largo para comparar."""
+        if hasta <= desde:
+            raise HTTPException(422, "El período está al revés")
+
+        def numeros(d, h):
+            vs = [fila(v) for v in base.q("SELECT * FROM ventas WHERE anulada = 0 AND ts >= ? AND ts < ?", (d, h))]
+            pl = base.q("SELECT tipo, categoria, SUM(monto) m FROM plata WHERE anulado = 0 AND ts >= ? AND ts < ? GROUP BY tipo, categoria", (d, h))
+            ingresos = sum(v["total"] for v in vs)
+            costo = sum(v["costo"] for v in vs)
+            envios = sum(v["envio_costo"] for v in vs)
+            bruta = ingresos - costo - envios
+            gastos = sum(f["m"] for f in pl if f["tipo"] == "gasto")
+            return vs, pl, {
+                "ventas": len(vs), "ingresos": round(ingresos, 2), "costo_mercaderia": round(costo, 2),
+                "envios": round(envios, 2), "descuentos": round(sum(v["descuento"] for v in vs), 2),
+                "ganancia_bruta": round(bruta, 2), "gastos": round(gastos, 2), "ganancia_neta": round(bruta - gastos, 2),
+                "margen": round(bruta / ingresos * 100, 1) if ingresos else 0,
+                "ticket_promedio": round(ingresos / len(vs), 2) if vs else 0,
+                "compras": round(sum(f["m"] for f in pl if f["tipo"] == "compra"), 2),
+                "inversiones": round(sum(f["m"] for f in pl if f["tipo"] == "inversion"), 2),
+            }
+
+        vs, pl, r = numeros(desde, hasta)
+        _, _, anterior = numeros(desde - (hasta - desde), desde)
+
+        def agrupar(clave):
+            g = {}
+            for v in vs:
+                k = clave(v)
+                x = g.setdefault(k, {"nombre": k, "ventas": 0, "ingresos": 0.0, "ganancia": 0.0})
+                x["ventas"] += 1
+                x["ingresos"] += v["total"]
+                x["ganancia"] += v["total"] - v["costo"] - v["envio_costo"]
+            return sorted(({**x, "ingresos": round(x["ingresos"], 2), "ganancia": round(x["ganancia"], 2)} for x in g.values()),
+                          key=lambda x: -x["ingresos"])
+
+        productos, sin_costo = {}, 0
+        for v in vs:
+            for i in v["items"]:
+                k = i.get("producto_id") or ("?" + i["nombre"])
+                x = productos.setdefault(k, {"nombre": i["nombre"], "unidades": 0, "ingresos": 0.0, "ganancia": 0.0})
+                x["unidades"] += i["cantidad"]
+                x["ingresos"] += i["precio"] * i["cantidad"]
+                x["ganancia"] += (i["precio"] - (i.get("costo") or 0)) * i["cantidad"]
+                sin_costo += 1 if not i.get("costo") else 0
+        dias = {}
+        for v in vs:
+            k = inicio_dia(v["ts"], tz)
+            x = dias.setdefault(k, {"dia": k, "ventas": 0, "ingresos": 0.0, "ganancia": 0.0})
+            x["ventas"] += 1
+            x["ingresos"] += v["total"]
+            x["ganancia"] += v["total"] - v["costo"] - v["envio_costo"]
+        stock = base.uno("SELECT COALESCE(SUM(MAX(stock,0) * costo),0) costo, COALESCE(SUM(MAX(stock,0) * precio),0) venta, "
+                         "COALESCE(SUM(MAX(stock,0)),0) unidades, SUM(CASE WHEN stock <= 0 THEN 1 ELSE 0 END) sin_stock, "
+                         "SUM(CASE WHEN costo = 0 THEN 1 ELSE 0 END) sin_costo FROM productos WHERE activo = 1 AND controla_stock = 1")
+        return {
+            **r,
+            "anterior": anterior,
+            "por_origen": agrupar(lambda v: "Tienda web" if v["origen"] == "web" else "Por fuera (mostrador)"),
+            "por_medio_pago": agrupar(lambda v: v["medio_pago"] or "Sin dato"),
+            "productos": sorted(({**x, "ingresos": round(x["ingresos"], 2), "ganancia": round(x["ganancia"], 2)} for x in productos.values()),
+                                key=lambda x: -x["ingresos"])[:15],
+            "gastos_por_categoria": sorted(({"categoria": f["categoria"] or "Otros", "monto": round(f["m"], 2)} for f in pl if f["tipo"] == "gasto"),
+                                           key=lambda x: -x["monto"]),
+            "por_dia": [{**x, "ingresos": round(x["ingresos"], 2), "ganancia": round(x["ganancia"], 2)} for _, x in sorted(dias.items())],
+            "lineas_sin_costo": sin_costo,
+            "stock": {"valor_costo": round(stock["costo"], 2), "valor_venta": round(stock["venta"], 2), "unidades": stock["unidades"],
+                      "sin_stock": stock["sin_stock"] or 0, "productos_sin_costo": stock["sin_costo"] or 0},
+        }
+
+    # ---------- clientes
+    def clave_cliente(c: dict) -> str:
+        if c.get("email"):
+            return "e:" + c["email"].strip().lower()
+        tel = "".join(ch for ch in str(c.get("telefono") or "") if ch.isdigit())
+        if len(tel) >= 6:
+            return "t:" + tel[-8:]  # últimos 8 dígitos: así +54 9 261 ... y 261 ... son el mismo
+        if (c.get("nombre") or "").strip() and c["nombre"] != "(borrado a pedido)":
+            return "n:" + c["nombre"].strip().lower()
+        return ""
+
+    @app.get("/api/clientes", dependencies=[Depends(admin)])
+    def clientes():
+        """Clientes armados a partir de las ventas (web y por fuera), con sus compras."""
+        g = {}
+        for v in base.q("SELECT * FROM ventas WHERE anulada = 0 ORDER BY ts"):
+            v = fila(v)
+            c = v["cliente"] or {}
+            k = clave_cliente(c)
+            if not k:
+                continue
+            x = g.setdefault(k, {"clave": k, "nombre": "", "email": "", "telefono": "", "documento": "", "ciudad": "", "provincia": "",
+                                 "compras": 0, "total": 0.0, "unidades": 0, "primera": v["ts"], "ultima": v["ts"], "origenes": set(), "ventas": []})
+            for campo in ("nombre", "email", "telefono", "documento", "ciudad", "provincia"):
+                if c.get(campo):
+                    x[campo] = c[campo]  # queda el dato más nuevo
+            x["compras"] += 1
+            x["total"] += v["total"]
+            x["unidades"] += sum(i["cantidad"] for i in v["items"])
+            x["ultima"] = v["ts"]
+            x["origenes"].add(v["origen"])
+            x["ventas"].append({"id": v["id"], "ts": v["ts"], "total": v["total"], "origen": v["origen"], "numero": v["pedido_numero"],
+                                "items": [f"{i['cantidad']:g} × {i['nombre']}" for i in v["items"]]})
+        out = []
+        for x in g.values():
+            x["total"] = round(x["total"], 2)
+            x["promedio"] = round(x["total"] / x["compras"], 2)
+            x["origenes"] = sorted(x["origenes"])
+            x["ventas"].reverse()
+            out.append(x)
+        return sorted(out, key=lambda x: -x["ultima"])
 
     # Funciones expuestas para los tests y para el hilo de reintentos.
     app.state.procesar_aviso = procesar_aviso
