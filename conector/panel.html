@@ -128,7 +128,7 @@ async function productos() {
   $('#vista').innerHTML = `<div class="card"><div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Productos (${S.productos.length})</h2>
     <input id="buscar" placeholder="Buscar por nombre o SKU" style="max-width:280px" value="${esc(q)}"></div>
     ${lista.length ? `<div class="tablebox"><table><thead><tr><th>Producto</th><th>SKU</th><th class="r">Precio</th><th class="r">Costo</th><th class="r">Stock</th><th></th></tr></thead><tbody>
-    ${lista.map(p => `<tr><td>${esc(p.nombre)}${p.tn_variante_id ? '' : ' <span class="tag">solo acá</span>'}${p.sincronizado ? '' : ' <span class="tag warn">falta mandar a Tiendanube</span>'}</td>
+    ${lista.map(p => `<tr><td>${esc(p.nombre)}${p.tn_variante_id ? '' : ' <span class="tag">solo acá</span>'}${p.sincronizado || !p.tn_variante_id ? '' : ' <span class="tag warn">falta mandar a Tiendanube</span>'}</td>
       <td class="tiny">${esc(p.sku) || '<span class="tag warn">sin SKU</span>'}</td><td class="r">${fmt(p.precio)}</td>
       <td class="r">${p.costo ? fmt(p.costo) : '<span class="tag warn">cargar</span>'}</td>
       <td class="r">${p.controla_stock ? (p.stock <= p.minimo ? `<span class="tag bad">${fq(p.stock)}</span>` : fq(p.stock)) : '<span class="tag">sin límite</span>'}</td>
