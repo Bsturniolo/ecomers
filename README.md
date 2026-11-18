@@ -20,7 +20,7 @@ Toma lo que servía de [MILENIUM-2](https://github.com/Bsturniolo/MILENIUM-2) (s
 | Clientes | Lista armada sola con las ventas web y las de afuera: contacto, ciudad, compras, total gastado, quién repite. Se descarga como planilla |
 | Panel | `/panel`: inicio, ventas, productos, vender, balances, clientes, conexión. Funciona en el celular |
 
-Lo que **no** hace (todavía): facturación electrónica, varias sucursales de stock, compras a proveedores.
+Lo que **no** hace (todavía): facturación electrónica, varias sucursales de stock, cuentas corrientes con proveedores, comisión de Mercado Pago automática (se carga como gasto).
 
 ## Cómo dejarlo andando
 
