@@ -6,25 +6,25 @@
 <title>Panel de la tienda</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Lora:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Colores oscuros cálidos (cacao, tierra, lino) */
+  /* Identidad propia de Ecomers: noche azulada + violeta eléctrico */
   :root {
     color-scheme:dark;
-    --bg:#16120f; --bg2:#1f1a15; --card:#221c17; --tx:#f1e9df; --mut:#b3a493; --line:#352d25; --line2:#4a3f35;
-    --acc:#e6cfb1; --on-acc:#241b13; --acc-soft:#33291f; --ok:#79c995; --ok-soft:#1f3326; --bad:#f19a88; --bad-soft:#3a2420; --warn:#f0bd6c; --warn-soft:#382c18;
-    --sombra:0 1px 2px rgba(0,0,0,.35), 0 6px 20px rgba(0,0,0,.18);
-    --serif:"Lora", Georgia, serif; --sans:"Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --rojo:#d9534a; --pino:#2f6b4a; --oro:#e9c46a;
+    --bg:#0e1014; --bg2:#151821; --card:#171b23; --tx:#eef0f5; --mut:#98a1b3; --line:#252a35; --line2:#343b49;
+    --acc:#9d8cff; --on-acc:#15102e; --acc-soft:#23203d; --ok:#6fd8a0; --ok-soft:#15302a; --bad:#ff8f8f; --bad-soft:#3a1d22; --warn:#ffc46b; --warn-soft:#362a14;
+    --sombra:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.22);
+    --disp:"Bricolage Grotesque", "Inter", system-ui, sans-serif; --sans:"Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --t1:#2a2160; --t2:#171b23; --tt:#c9bfff;
   }
   * { box-sizing:border-box; }
-  html, body { margin:0; background:var(--bg); color:var(--tx); font:15px/1.5 var(--sans); -webkit-font-smoothing:antialiased; }
+  html, body { margin:0; background:radial-gradient(900px 420px at 85% -12%, color-mix(in srgb, var(--acc) 13%, transparent), transparent 70%) fixed, var(--bg); color:var(--tx); font:15px/1.5 var(--sans); -webkit-font-smoothing:antialiased; }
   a { color:var(--tx); text-underline-offset:2px; }
   /* ---------- estructura: menú a la izquierda (compu) o abajo (celular) */
   #lado { position:fixed; inset:0 auto 0 0; width:228px; background:var(--card); border-right:1px solid var(--line); display:flex; flex-direction:column; padding:20px 14px; z-index:3; }
   .marca { display:flex; align-items:center; gap:10px; padding:0 8px 18px; }
-  .marca .logo { width:34px; height:34px; border-radius:10px; background:var(--acc); color:var(--on-acc); display:grid; place-items:center; font:600 17px var(--serif); }
-  .marca b { font:600 17px/1.15 var(--serif); display:block; } .marca small { color:var(--mut); font-size:12px; }
+  .marca .logo { position:relative; width:36px; height:36px; border-radius:11px; background:linear-gradient(140deg, var(--acc), color-mix(in srgb, var(--acc) 55%, #ff7ab8)); color:var(--on-acc); display:grid; place-items:center; font:600 17px var(--disp); }
+  .marca .logo svg { width:22px; height:22px; } .marca b { font:700 18px/1.1 var(--disp); letter-spacing:-.02em; display:block; } .marca small { color:var(--mut); font-size:12px; }
   #nav { display:flex; flex-direction:column; gap:2px; }
   #nav a { display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:10px; color:var(--mut); text-decoration:none; font-weight:500; }
   #nav a svg { width:19px; height:19px; flex:none; }
@@ -34,7 +34,7 @@
   #estadoTienda b { color:var(--tx); font-weight:600; display:flex; align-items:center; gap:6px; margin-bottom:2px; }
   .punto { width:8px; height:8px; border-radius:50%; background:var(--mut); display:inline-block; } .punto.ok { background:var(--ok); } .punto.bad { background:var(--bad); }
   #arriba { margin-left:228px; padding:22px 32px 6px; display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-  #titulo { font:600 26px/1.2 var(--serif); margin:0; letter-spacing:-.01em; }
+  #titulo { font:600 26px/1.2 var(--disp); margin:0; letter-spacing:-.01em; }
   #subtitulo { color:var(--mut); font-size:13px; margin:2px 0 0; }
   main { margin-left:228px; padding:14px 32px 40px; max-width:1240px; }
   @media (max-width:860px) {
@@ -52,8 +52,8 @@
   .grid > .card { margin-bottom:0; }
   .stat small { color:var(--mut); display:block; font-size:12.5px; }
   .stat > small:first-child { text-transform:uppercase; letter-spacing:.06em; font-size:11px; font-weight:600; margin-bottom:6px; }
-  .stat b { font:600 27px/1.15 var(--serif); font-variant-numeric:lining-nums tabular-nums; display:block; margin-bottom:4px; letter-spacing:-.01em; }
-  h2 { font:600 17px/1.3 var(--serif); margin:0 0 14px; }
+  .stat b { font:600 27px/1.15 var(--disp); font-variant-numeric:lining-nums tabular-nums; display:block; margin-bottom:4px; letter-spacing:-.01em; }
+  h2 { font:600 17px/1.3 var(--disp); margin:0 0 14px; }
   table { width:100%; border-collapse:collapse; }
   th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
   tbody tr:last-child > td { border-bottom:0; }
@@ -91,43 +91,67 @@
   .ultima div { min-width:0; flex:1; } .ultima div span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .entrar { min-height:100vh; display:grid; place-items:center; padding:16px; }
   .entrar .card { width:min(400px, 100%); padding:28px; }
-  /* ---------- Navidad: solo del 15/11 al 6/1 (o si se prende a mano) */
-  body.navidad { --acc:#e9c46a; --on-acc:#1d1710; --acc-soft:#2b2a1c; background:radial-gradient(1200px 500px at 70% -10%, rgba(47,107,74,.18), transparent 70%), var(--bg); background-attachment:fixed; }
-  body.navidad .marca .logo { background:var(--rojo); color:#fff; position:relative; }
-  body.navidad .marca .logo::after { content:""; position:absolute; top:-7px; right:-6px; width:16px; height:12px; background:var(--rojo); border-radius:3px 10px 2px 2px; transform:rotate(22deg); box-shadow:inset 0 -3px 0 #fff; }
-  body.navidad .marca .logo::before { content:""; position:absolute; top:-11px; right:-9px; width:7px; height:7px; border-radius:50%; background:#fff; z-index:1; }
-  #guirnalda { display:none; }
-  body.navidad #guirnalda { display:flex; position:fixed; top:0; left:228px; right:0; height:22px; justify-content:space-around; pointer-events:none; z-index:2;
-    background:radial-gradient(ellipse 50% 14px at 50% 0, transparent 92%, var(--line2) 94%, transparent 100%) 0 -4px / 60px 22px repeat-x; }
-  #guirnalda i { width:7px; height:11px; border-radius:50% 50% 45% 45%; margin-top:9px; background:var(--c); box-shadow:0 0 8px 1px var(--c); animation:titila 2.4s ease-in-out infinite; }
-  #guirnalda i:nth-child(4n+1) { --c:#e8574b; } #guirnalda i:nth-child(4n+2) { --c:#e9c46a; animation-delay:.6s; }
-  #guirnalda i:nth-child(4n+3) { --c:#5cc08a; animation-delay:1.2s; } #guirnalda i:nth-child(4n) { --c:#7fb4ff; animation-delay:1.8s; }
+  /* ---------- Temas por fecha: Navidad, Día de los Muertos, Mundial, cumple */
+  body.tema-navidad { --acc:#f2c35b; --on-acc:#1d1608; --acc-soft:#2e2814; --t1:#163a29; --t2:#3a1a1a; --tt:#f2c35b; }
+  body.tema-muertos { --acc:#ff9f1c; --on-acc:#2a1400; --acc-soft:#36230f; --t1:#4a1450; --t2:#3a1a10; --tt:#ffb74d; }
+  body.tema-mundial { --acc:#75aadb; --on-acc:#0b1a2a; --acc-soft:#1a2b3d; --t1:#1d3d5f; --t2:#1b1f2a; --tt:#f6d36b; }
+  body.tema-cumple  { --acc:#ff7ab8; --on-acc:#2e0b1d; --acc-soft:#3a1a2b; --t1:#4a1d4f; --t2:#1d2a4a; --tt:#ffd166; }
+  #guirnalda, #lluvia { display:none; }
+  body.fuera #guirnalda { left:0; }
+  body.con-tema #guirnalda { display:flex; position:fixed; top:0; left:228px; right:0; height:26px; justify-content:space-around; align-items:flex-start; pointer-events:none; z-index:2; overflow:hidden; }
+  body.con-tema #arriba { padding-top:38px; }
+  body.con-tema main, body.con-tema #arriba { position:relative; z-index:2; }
+  body.con-tema #lluvia { display:block; position:fixed; inset:0; pointer-events:none; z-index:1; overflow:hidden; }
+  /* luces (Navidad) */
+  #guirnalda.luces { background:radial-gradient(ellipse 50% 14px at 50% 0, transparent 92%, var(--line2) 94%, transparent 100%) 0 -4px / 60px 22px repeat-x; }
+  #guirnalda.luces i { width:7px; height:11px; border-radius:50% 50% 45% 45%; margin-top:9px; background:var(--c); box-shadow:0 0 8px 1px var(--c); animation:titila 2.4s ease-in-out infinite; }
   @keyframes titila { 50% { opacity:.35; box-shadow:none; } }
-  body.navidad #arriba { padding-top:34px; }
-  #nieve { position:fixed; inset:0; pointer-events:none; z-index:1; overflow:hidden; display:none; }
-  body.navidad #nieve { display:block; }
-  body.navidad main, body.navidad #arriba { position:relative; z-index:2; }
-  #nieve i { position:absolute; top:-12px; border-radius:50%; background:#fff; opacity:.55; animation:cae linear infinite; }
-  @keyframes cae { to { transform:translate3d(var(--x), 105vh, 0); } }
-  @media (prefers-reduced-motion: reduce) { #nieve { display:none !important; } #guirnalda i { animation:none; } }
-  .fiestas { position:relative; overflow:hidden; border-color:color-mix(in srgb, var(--oro) 35%, var(--line)); background:linear-gradient(120deg, #1d3a2a, #2a1d17 70%); }
-  .fiestas h2 { color:var(--oro); margin-bottom:4px; } .fiestas p { margin:0; color:#e8ddcf; }
-  .fiestas .cuenta { font:600 34px/1 var(--serif); color:#fff; } .fiestas .cuenta small { font:500 13px var(--sans); color:#cbbfae; display:block; margin-top:4px; }
-  .fiestas .arbol { position:absolute; right:14px; bottom:-6px; width:84px; opacity:.9; }
-  #fiestasBoton { margin-top:10px; width:100%; font-size:12px; padding:6px 8px; color:var(--mut); background:transparent; }
-  .solo-cel { display:none; }
-  @media (max-width:860px) { #fiestasBoton { display:none; } .solo-cel { display:inline-block; margin-top:10px; } .grid { grid-template-columns:repeat(auto-fit, minmax(min(150px,100%), 1fr)); gap:10px; } .stat b { font-size:21px; } .card { padding:16px; } body.navidad #guirnalda { left:0; } .fiestas .arbol { width:60px; opacity:.5; } }
+  /* banderines (Mundial, cumple) y papel picado (Día de los Muertos) */
+  #guirnalda.banderines { border-top:2px solid var(--line2); }
+  #guirnalda.banderines i { width:16px; height:20px; background:var(--c); clip-path:polygon(0 0,100% 0,50% 100%); opacity:.9; }
+  #guirnalda.papel { border-top:2px solid var(--line2); justify-content:space-evenly; }
+  #guirnalda.papel i { width:30px; height:22px; background:var(--c); opacity:.88; clip-path:polygon(0 0,100% 0,100% 82%,85% 100%,70% 82%,50% 100%,30% 82%,15% 100%,0 82%);
+    background:radial-gradient(circle 2.4px, var(--bg) 92%, transparent 100%) 3px 3px / 9px 7px, var(--c); }
+  /* lo que cae: nieve, pétalos de cempasúchil, papelitos */
+  #lluvia i { position:absolute; top:-14px; background:var(--c, #fff); animation:cae linear infinite; }
+  #lluvia.nieve i { border-radius:50%; opacity:.55; }
+  #lluvia.petalos i { border-radius:60% 0 60% 0; opacity:.75; }
+  #lluvia.papelitos i { border-radius:1px; opacity:.8; }
+  @keyframes cae { to { transform:translate3d(var(--x), 105vh, 0) rotate(var(--r, 0deg)); } }
+  @media (prefers-reduced-motion: reduce) { #lluvia { display:none !important; } #guirnalda i { animation:none; } }
+  /* adornos del logo */
+  body.tema-navidad .marca .logo::after { content:""; position:absolute; top:-8px; right:-7px; width:17px; height:13px; background:#d9534a; border-radius:3px 10px 2px 2px; transform:rotate(22deg); box-shadow:inset 0 -3px 0 #fff; }
+  body.tema-navidad .marca .logo::before { content:""; position:absolute; top:-12px; right:-10px; width:7px; height:7px; border-radius:50%; background:#fff; z-index:1; }
+  body.tema-cumple .marca .logo::after { content:""; position:absolute; top:-14px; right:-4px; width:14px; height:18px; background:repeating-linear-gradient(45deg,#ffd166 0 4px,#4cc9f0 4px 8px); clip-path:polygon(50% 0,100% 100%,0 100%); transform:rotate(18deg); }
+  body.tema-mundial .marca .logo { background:linear-gradient(180deg,#75aadb 0 33%,#f4f6fa 33% 67%,#75aadb 67%); color:#0b1a2a; }
+  body.tema-muertos .marca .logo { background:linear-gradient(140deg,#ff9f1c,#e0218a); }
+  /* cartel de Inicio */
+  .fiestas { position:relative; overflow:hidden; border-color:color-mix(in srgb, var(--tt) 30%, var(--line)); background:linear-gradient(120deg, var(--t1), var(--t2) 75%); }
+  .fiestas h2 { color:var(--tt); margin-bottom:4px; font-size:19px; } .fiestas p { margin:0; color:#e9e6f0; }
+  .fiestas .cuenta { font:700 38px/1 var(--disp); color:#fff; } .fiestas .cuenta small { font:500 13px var(--sans); color:#cfcbd8; display:block; margin-top:4px; }
+  .fiestas .dibujo { position:absolute; right:16px; bottom:-4px; width:88px; height:88px; opacity:.95; }
+  #temasBoton { margin-top:10px; width:100%; font-size:12.5px; padding:7px 8px; color:var(--mut); background:transparent; }
+  dialog#temas { background:var(--card); color:var(--tx); border:1px solid var(--line2); border-radius:18px; padding:22px; width:min(460px, calc(100vw - 32px)); box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  dialog#temas::backdrop { background:rgba(5,6,10,.6); }
+  .temas-lista { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(120px,100%),1fr)); gap:8px; margin:6px 0 14px; }
+  .temas-lista label { display:flex; flex-direction:column; gap:2px; padding:10px 12px; border:1px solid var(--line2); border-radius:12px; cursor:pointer; color:var(--tx); font-weight:600; font-size:13.5px; }
+  .temas-lista label small { color:var(--mut); font-weight:400; font-size:12px; }
+  .temas-lista input { position:absolute; opacity:0; width:1px; }
+  .temas-lista label:has(input:checked) { border-color:var(--acc); background:var(--acc-soft); }
+  .temas-lista label:has(input:focus-visible) { outline:2px solid var(--acc); }
+  @media (max-width:860px) { #temasBoton { display:none; } .grid { grid-template-columns:repeat(auto-fit, minmax(min(150px,100%), 1fr)); gap:10px; } .stat b { font-size:21px; } .card { padding:16px; } body.con-tema #guirnalda { left:0; } .fiestas .dibujo { width:64px; height:64px; opacity:.45; } }
 </style>
 </head>
 <body>
 <aside id="lado">
-  <div class="marca"><span class="logo">T</span><span><b>Panel</b><small>de la tienda</small></span></div>
+  <div class="marca"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/><path d="m9 16 2-2 1.5 1.5L15 13"/></svg></span><span><b>Ecomers</b><small>panel de la tienda</small></span></div>
   <nav id="nav"></nav>
   <div id="estadoTienda"></div>
-  <button id="fiestasBoton" type="button" hidden></button>
+  <button id="temasBoton" type="button">🎉 Temas y fechas</button>
 </aside>
 <div id="guirnalda" aria-hidden="true"></div>
-<div id="nieve" aria-hidden="true"></div>
+<div id="lluvia" aria-hidden="true"></div>
+<dialog id="temas"></dialog>
 <div id="arriba"><div><h1 id="titulo"></h1><p id="subtitulo"></p></div><div id="acciones"></div></div>
 <main id="vista"></main>
 <div id="toast"></div>
@@ -187,7 +211,7 @@ function login() {
   document.body.classList.add('fuera');
   $('#lado').style.display = 'none'; $('#arriba').style.display = 'none';
   $('#vista').style.margin = '0'; $('#vista').style.padding = '0'; $('#vista').style.maxWidth = 'none';
-  $('#vista').innerHTML = `<div class="entrar"><div class="card"><div class="marca" style="padding:0 0 18px"><span class="logo">T</span><span><b>Panel</b><small>de la tienda</small></span></div>
+  $('#vista').innerHTML = `<div class="entrar"><div class="card"><div class="marca" style="padding:0 0 18px"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/><path d="m9 16 2-2 1.5 1.5L15 13"/></svg></span><span><b>Ecomers</b><small>panel de la tienda</small></span></div>
     <form id="fLogin"><label>Clave<input id="clave" type="password" autocomplete="current-password" required autofocus></label>
     <p class="tiny mut">Es la que aparece en la terminal al arrancar con <code>iniciar.sh</code>.</p>
     <p style="margin-bottom:0"><button class="pri" style="width:100%">Entrar</button></p></form></div></div>`;
@@ -211,32 +235,86 @@ async function render() {
 }
 window.onhashchange = render;
 
-// ---------- Fiestas: se prenden solas del 15/11 al 6/1. El botón del menú las apaga o prende (queda guardado en esta compu).
-const enTemporada = (d => { const m = d.getMonth(), n = d.getDate(); return (m === 10 && n >= 15) || m === 11 || (m === 0 && n <= 6); })(new Date());
-function fiestasPrendidas() { let v = null; try { v = localStorage.getItem('panel-fiestas'); } catch (e) {} return v === null ? enTemporada : v === '1'; }
-function aplicarFiestas() {
-  const on = fiestasPrendidas();
-  document.body.classList.toggle('navidad', on);
-  const b = $('#fiestasBoton'); b.hidden = !enTemporada && !on; b.textContent = on ? '❄ Apagar adornos de fiestas' : '❄ Prender adornos de fiestas';
-  if (on && !$('#guirnalda').children.length) {
-    $('#guirnalda').innerHTML = '<i></i>'.repeat(26);
-    $('#nieve').innerHTML = Array.from({ length: 34 }, () => { const t = 2 + Math.random() * 3.5; return `<i style="left:${(Math.random() * 100).toFixed(1)}%;width:${t}px;height:${t}px;--x:${Math.round(Math.random() * 80 - 40)}px;animation-duration:${(9 + Math.random() * 12).toFixed(1)}s;animation-delay:-${(Math.random() * 20).toFixed(1)}s"></i>`; }).join('');
-  }
+// ---------- Temas por fecha. Se prenden solos según el día; en "Temas y fechas" se elige uno fijo, se apagan o se carga el cumple.
+const SVG_T = {
+  navidad: '<svg class="dibujo" viewBox="0 0 80 100" aria-hidden="true"><path d="M40 4 62 38H52l18 26H58l16 22H6l16-22H10l18-26H18z" fill="#2f6b4a"/><rect x="34" y="86" width="12" height="12" rx="2" fill="#6b4a32"/><circle cx="40" cy="6" r="5" fill="#f2c35b"/><circle cx="32" cy="40" r="3" fill="#e8574b"/><circle cx="50" cy="56" r="3" fill="#f2c35b"/><circle cx="28" cy="70" r="3" fill="#7fb4ff"/><circle cx="54" cy="78" r="3" fill="#e8574b"/></svg>',
+  muertos: '<svg class="dibujo" viewBox="0 0 80 80" aria-hidden="true"><path d="M40 8c-17 0-28 11-28 27 0 9 4 15 10 19v10a4 4 0 0 0 4 4h28a4 4 0 0 0 4-4V54c6-4 10-10 10-19C68 19 57 8 40 8z" fill="#f4efe6"/><circle cx="29" cy="36" r="8" fill="#e0218a"/><circle cx="51" cy="36" r="8" fill="#ff9f1c"/><circle cx="29" cy="36" r="3" fill="#2a1030"/><circle cx="51" cy="36" r="3" fill="#2a1030"/><path d="M40 44l-4 7h8z" fill="#2a1030"/><path d="M30 60v6M36 60v7M42 60v7M48 60v6" stroke="#2a1030" stroke-width="2"/><circle cx="40" cy="19" r="4" fill="#7b2cbf"/><circle cx="33" cy="22" r="2.5" fill="#2ec4b6"/><circle cx="47" cy="22" r="2.5" fill="#2ec4b6"/></svg>',
+  mundial: '<svg class="dibujo" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="32" fill="#f4f6fa"/><path d="M40 28l11 8-4 13H33l-4-13z" fill="#1b1f2a"/><path d="M40 28V9M51 36l18-6M47 49l11 15M33 49L22 64M29 36l-18-6" stroke="#1b1f2a" stroke-width="2.5"/><circle cx="40" cy="40" r="32" fill="none" stroke="#75aadb" stroke-width="3"/></svg>',
+  cumple: '<svg class="dibujo" viewBox="0 0 80 80" aria-hidden="true"><rect x="14" y="40" width="52" height="28" rx="5" fill="#ff7ab8"/><path d="M14 50c6 5 11 5 17 0s11-5 17 0 12 5 18 0" stroke="#fff" stroke-width="4" fill="none"/><rect x="10" y="66" width="60" height="5" rx="2.5" fill="#ffd166"/><rect x="26" y="26" width="5" height="14" rx="2" fill="#4cc9f0"/><rect x="38" y="24" width="5" height="16" rx="2" fill="#ffd166"/><rect x="50" y="26" width="5" height="14" rx="2" fill="#4cc9f0"/><path d="M28.5 18c2 3 2 5 0 6-2-1-2-3 0-6zM40.5 15c2 3 2 5 0 6-2-1-2-3 0-6zM52.5 18c2 3 2 5 0 6-2-1-2-3 0-6z" fill="#ffb703"/></svg>',
+};
+// Mundiales: [arranca, termina]. Las fechas de 2030 son aproximadas: corregirlas cuando FIFA confirme.
+const MUNDIALES = [['2030-06-08', '2030-07-21'], ['2034-06-15', '2034-07-30']];
+const hoy0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const dias = (a, b) => Math.round((b - a) / 864e5);
+const enDias = (n, que) => ({ cuenta: n, cuentaTxt: `${n === 1 ? 'día' : 'días'} ${que}` });
+function leerTemas() { let c = {}; try { c = JSON.parse(localStorage.getItem('panel-temas') || '{}') || {}; } catch (e) {} return { modo: c.modo || 'auto', cumple: c.cumple || '', nombre: c.nombre || '' }; }
+function guardarTemas(c) { try { localStorage.setItem('panel-temas', JSON.stringify(c)); } catch (e) {} }
+function proximoCumple(c, h) { if (!/^\d\d-\d\d$/.test(c.cumple)) return null; const [m, d] = c.cumple.split('-').map(Number); let f = new Date(h.getFullYear(), m - 1, d); if (f < h) f = new Date(h.getFullYear() + 1, m - 1, d); return f; }
+const TEMAS = {
+  cumple: { nombre: 'Mi cumple', cuando: 'los 3 días antes y el día', guirnalda: 'banderines', colores: ['#ff7ab8', '#ffd166', '#4cc9f0', '#9d8cff', '#6fd8a0'], lluvia: 'papelitos', caen: ['#ff7ab8', '#ffd166', '#4cc9f0', '#9d8cff', '#6fd8a0'],
+    activo: (h, c) => { const f = proximoCumple(c, h); return !!f && dias(h, f) <= 3; },
+    cartel: (h, c) => { const f = proximoCumple(c, h), n = f ? dias(h, f) : 0, quien = c.nombre ? ', ' + esc(c.nombre) : '';
+      return n > 0 ? { titulo: `¡Se viene tu cumple${quien}!`, txt: 'Andá pensando en la torta.', ...enDias(n, 'para tu cumple') } : { titulo: `¡Feliz cumple${quien}!`, txt: 'Que tengas un gran día. Hoy el panel está de fiesta.' }; } },
+  muertos: { nombre: 'Día de los Muertos', cuando: '28/10 al 2/11', guirnalda: 'papel', colores: ['#e0218a', '#ff9f1c', '#7b2cbf', '#2ec4b6', '#ffd166'], lluvia: 'petalos', caen: ['#ff9f1c', '#ffb703', '#fb8500'],
+    activo: h => (h.getMonth() === 9 && h.getDate() >= 28) || (h.getMonth() === 10 && h.getDate() <= 2),
+    cartel: h => { const n = dias(h, new Date(h.getFullYear(), 10, 2)); return n > 1 ? { titulo: 'Día de los Muertos', txt: 'Flores de cempasúchil y papel picado para recordar con alegría.', ...enDias(n, 'para el 2 de noviembre') } : { titulo: 'Día de los Muertos', txt: 'Un día para recordar con alegría a los que ya no están.' }; } },
+  mundial: { nombre: 'Mundial', cuando: '20 días antes y durante el Mundial', guirnalda: 'banderines', colores: ['#75aadb', '#f4f6fa'], lluvia: 'papelitos', caen: ['#75aadb', '#f4f6fa', '#f6d36b'],
+    activo: h => MUNDIALES.some(([a, b]) => dias(new Date(a + 'T00:00'), h) >= -20 && h <= new Date(b + 'T00:00')),
+    cartel: h => { const m = MUNDIALES.find(([a, b]) => h <= new Date(b + 'T00:00')), n = m ? dias(h, new Date(m[0] + 'T00:00')) : 0;
+      return n > 0 ? { titulo: '¡Se viene el Mundial!', txt: 'Buen momento para destacar camisetas, teles y todo lo que se usa para ver los partidos.', ...enDias(n, 'para el Mundial') } : { titulo: '¡Vamos Argentina!', txt: 'Época de Mundial: los días de partido se vende distinto, mirá los horarios.' }; } },
+  navidad: { nombre: 'Navidad', cuando: '15/11 al 6/1', guirnalda: 'luces', colores: ['#e8574b', '#f2c35b', '#5cc08a', '#7fb4ff'], lluvia: 'nieve', caen: ['#ffffff'],
+    activo: h => (h.getMonth() === 10 && h.getDate() >= 15) || h.getMonth() === 11 || (h.getMonth() === 0 && h.getDate() <= 6),
+    cartel: h => { const n = dias(h, new Date(h.getMonth() === 0 ? h.getFullYear() - 1 : h.getFullYear(), 11, 25));
+      if (n > 0) return { titulo: '¡Felices fiestas!', txt: 'Buena época para destacar regalos y combos en la tienda.', ...enDias(n, 'para Navidad') };
+      return { titulo: '¡Felices fiestas!', txt: n === 0 ? '¡Feliz Navidad! Que hoy vengan muchas ventas.' : h.getMonth() === 11 ? 'Que el año nuevo llegue con muchas ventas.' : '¡Feliz año nuevo! Que sea un gran año para la tienda.' }; } },
+};
+function temaDeHoy() {
+  const c = leerTemas(), h = hoy0();
+  if (c.modo === 'ninguno') return null;
+  if (TEMAS[c.modo]) return c.modo;
+  return Object.keys(TEMAS).find(k => TEMAS[k].activo(h, c)) || null;  // si se pisan dos, gana el primero de la lista (el cumple)
 }
-$('#fiestasBoton').onclick = () => { try { localStorage.setItem('panel-fiestas', fiestasPrendidas() ? '0' : '1'); } catch (e) {} aplicarFiestas(); if ((location.hash || '#inicio') === '#inicio') render(); };
-const ARBOL = '<svg class="arbol" viewBox="0 0 80 100" aria-hidden="true"><path d="M40 4 62 38H52l18 26H58l16 22H6l16-22H10l18-26H18z" fill="#2f6b4a"/><rect x="34" y="86" width="12" height="12" rx="2" fill="#6b4a32"/><circle cx="40" cy="6" r="5" fill="#e9c46a"/><circle cx="32" cy="40" r="3" fill="#e8574b"/><circle cx="50" cy="56" r="3" fill="#e9c46a"/><circle cx="28" cy="70" r="3" fill="#7fb4ff"/><circle cx="54" cy="78" r="3" fill="#e8574b"/></svg>';
-function cartelFiestas() {
-  if (!document.body.classList.contains('navidad')) return '';
-  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-  const nav = new Date(hoy.getMonth() === 0 ? hoy.getFullYear() - 1 : hoy.getFullYear(), 11, 25);
-  const faltan = Math.round((nav - hoy) / 864e5);
-  let txt, cuenta = '';
-  if (faltan > 0) { txt = 'Se vienen las fiestas: buena época para destacar regalos y combos en la tienda.'; cuenta = `<div class="cuenta">${faltan}<small>${faltan === 1 ? 'día' : 'días'} para Navidad</small></div>`; }
-  else if (faltan === 0) txt = '¡Feliz Navidad! Que hoy vengan muchas ventas.';
-  else if (hoy.getMonth() === 11) txt = 'Que el año nuevo llegue con muchas ventas.';
-  else txt = '¡Feliz año nuevo! Que sea un gran año para la tienda.';
-  return `<div class="card fiestas"><div class="row" style="gap:20px;align-items:center;padding-right:70px">${cuenta}<div><h2>¡Felices fiestas!</h2><p>${txt}</p><button class="small solo-cel" data-fiestas>Apagar adornos</button></div></div>${ARBOL}</div>`;
+const azar = (a, b) => a + Math.random() * (b - a);
+function aplicarTema() {
+  const k = temaDeHoy(), t = TEMAS[k];
+  document.body.className = document.body.className.replace(/\b(con-tema|tema-\w+)\b/g, '').trim();
+  $('#guirnalda').innerHTML = $('#lluvia').innerHTML = '';
+  S.tema = k;
+  if (!t) return;
+  document.body.classList.add('con-tema', 'tema-' + k);
+  const g = $('#guirnalda'); g.className = t.guirnalda;
+  const cuantos = { luces: 26, banderines: 34, papel: 16 }[t.guirnalda];
+  g.innerHTML = Array.from({ length: cuantos }, (_, i) => `<i style="--c:${t.colores[i % t.colores.length]};animation-delay:${(i % 4) * .6}s"></i>`).join('');
+  const l = $('#lluvia'); l.className = t.lluvia;
+  l.innerHTML = Array.from({ length: t.lluvia === 'nieve' ? 34 : 26 }, () => {
+    const w = t.lluvia === 'nieve' ? azar(2, 5.5) : t.lluvia === 'petalos' ? azar(6, 10) : azar(5, 8), alto = t.lluvia === 'papelitos' ? w * .45 : t.lluvia === 'petalos' ? w * .7 : w;
+    return `<i style="left:${azar(0, 100).toFixed(1)}%;width:${w.toFixed(1)}px;height:${alto.toFixed(1)}px;--c:${t.caen[Math.floor(Math.random() * t.caen.length)]};--x:${Math.round(azar(-50, 50))}px;--r:${t.lluvia === 'nieve' ? 0 : Math.round(azar(180, 720))}deg;animation-duration:${azar(9, 21).toFixed(1)}s;animation-delay:-${azar(0, 20).toFixed(1)}s"></i>`;
+  }).join('');
 }
+function cartelTema() {
+  const t = TEMAS[S.tema]; if (!t) return '';
+  const x = t.cartel(hoy0(), leerTemas());
+  return `<div class="card fiestas"><div class="row" style="gap:22px;align-items:center;padding-right:84px">${x.cuenta ? `<div class="cuenta">${x.cuenta}<small>${x.cuentaTxt}</small></div>` : ''}<div><h2>${x.titulo}</h2><p>${x.txt}</p></div></div>${SVG_T[S.tema]}</div>`;
+}
+function abrirTemas() {
+  const c = leerTemas(), h = hoy0(), auto = Object.keys(TEMAS).find(k => TEMAS[k].activo(h, c));
+  const op = (v, n, sub) => `<label><input type="radio" name="modo" value="${v}"${c.modo === v ? ' checked' : ''}>${n}<small>${sub}</small></label>`;
+  const d = $('#temas');
+  d.innerHTML = `<form method="dialog" id="fTemas"><h2 style="margin-bottom:4px">Temas y fechas</h2>
+    <p class="tiny mut" style="margin-top:0">El panel se viste solo según la fecha. También podés dejar uno fijo o apagarlos. Se guarda en esta compu.</p>
+    <div class="temas-lista">${op('auto', 'Automático', auto ? 'hoy: ' + TEMAS[auto].nombre : 'hoy: ninguno')}${op('ninguno', 'Sin adornos', 'diseño de siempre')}
+      ${Object.keys(TEMAS).map(k => op(k, TEMAS[k].nombre, TEMAS[k].cuando)).join('')}</div>
+    <div class="form"><label>Fecha de tu cumple<input type="date" id="tCumple" value="${c.cumple ? '2000-' + c.cumple : ''}"></label><label>Tu nombre (para el saludo)<input id="tNombre" maxlength="30" value="${esc(c.nombre)}"></label></div>
+    <div class="row" style="justify-content:flex-end;margin-top:16px"><button value="cancelar" type="button" id="tCerrar">Cerrar</button><button class="pri" value="ok">Guardar</button></div></form>`;
+  $('#tCerrar').onclick = () => d.close();
+  $('#fTemas').onsubmit = () => {
+    const f = $('#tCumple').value;
+    guardarTemas({ modo: (d.querySelector('input[name=modo]:checked') || {}).value || 'auto', cumple: f ? f.slice(5) : '', nombre: $('#tNombre').value.trim() });
+    aplicarTema(); render(); toast('Listo, tema guardado.');
+  };
+  d.showModal();
+}
+$('#temasBoton').onclick = abrirTemas;
 
 // ---------- Inicio
 async function inicio() {
@@ -244,8 +322,8 @@ async function inicio() {
   const h = new Date().getHours();
   $('#titulo').textContent = h < 13 ? 'Buen día' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
   $('#subtitulo').textContent = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
-  $('#acciones').innerHTML = '<a href="#vender"><button class="pri">+ Venta por fuera</button></a>';
-  setTimeout(() => document.querySelectorAll('[data-fiestas]').forEach(b => b.onclick = () => $('#fiestasBoton').onclick()));
+  $('#acciones').innerHTML = '<div class="row"><button id="bTemas" title="Temas y fechas" aria-label="Temas y fechas">🎉</button><a href="#vender"><button class="pri">+ Venta por fuera</button></a></div>';
+  $('#bTemas').onclick = abrirTemas;
   const av = (tipo, txt, link, linkTxt) => `<li><span class="ic tag ${tipo}" style="padding:0">${tipo === 'ok' ? '✓' : '!'}</span><span>${txt}</span>${link ? `<a href="${link}">${linkTxt}</a>` : ''}</li>`;
   const alertas = [
     !e.conectada && av('warn', 'La tienda todavía no está conectada.', '#conexion', 'Conectar'),
@@ -255,7 +333,7 @@ async function inicio() {
     e.sin_sincronizar && av('warn', `${e.sin_sincronizar} producto(s) con stock pendiente de mandar a Tiendanube.`, '', ''),
     e.stock_bajo && av('warn', `${e.stock_bajo} producto(s) con poco stock.`, '#productos', 'Ver'),
   ].filter(Boolean);
-  $('#vista').innerHTML = cartelFiestas() + `
+  $('#vista').innerHTML = cartelTema() + `
   <div class="grid">
     <div class="card stat"><small>Vendido hoy</small><b>${fmt(e.hoy.total)}</b><small>${e.hoy.n} venta(s)</small></div>
     <div class="card stat"><small>Ganancia de hoy</small><b>${fmt(e.hoy.ganancia)}</b><small>restados costo y envío</small></div>
@@ -539,7 +617,7 @@ async function conexion() {
   document.querySelectorAll('[data-re]').forEach(b => b.onclick = async () => { try { await api(`/api/avisos/${b.dataset.re}/reintentar`, 'POST'); render(); } catch (e) { fallo(e); } });
 }
 
-aplicarFiestas();
+aplicarTema();
 render();
 </script>
 </body>
