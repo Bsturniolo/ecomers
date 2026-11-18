@@ -323,3 +323,10 @@ def test_simular_sin_tienda(c):
     assert r.status_code == 200
     assert c.get("/api/ventas", headers=ADMIN).json()[0]["medio_pago"] == "Simulado"
     assert prod(c, "MATE")["stock"] == 4
+
+
+def test_producto_solo_aca_no_queda_pendiente_de_tiendanube(c):
+    c.app_.state.base.ejec("INSERT INTO productos (nombre, sku, precio, stock, modificado) VALUES ('Mate', 'MATE', 9000, 5, 0)")
+    p = prod(c, "MATE")
+    assert c.post("/api/ventas", json={"items": [{"producto_id": p["id"], "cantidad": 1}]}, headers=ADMIN).status_code == 200
+    assert prod(c, "MATE")["stock"] == 4 and prod(c, "MATE")["sincronizado"] == 1

@@ -136,7 +136,7 @@ class Base:
                 return None
             saldo = round(p["stock"] + cantidad, 3)
             self.con.execute("UPDATE productos SET stock = ?, modificado = ?, sincronizado = ? WHERE id = ?",
-                             (saldo, ahora_ms(), p["sincronizado"] if not avisar_tienda else 0, producto_id))
+                             (saldo, ahora_ms(), 0 if avisar_tienda and p["tn_variante_id"] else p["sincronizado"], producto_id))
             self.con.execute("INSERT INTO movimientos (ts, producto_id, cantidad, saldo, tipo, detalle, venta_id) VALUES (?,?,?,?,?,?,?)",
                              (ts or ahora_ms(), producto_id, cantidad, saldo, tipo, detalle, venta_id))
             return saldo
