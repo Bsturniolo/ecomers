@@ -1,0 +1,29 @@
+# Conector + HTTPS automático. Ver docs/PASOS.md
+services:
+  conector:
+    build: ..
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - datos:/datos
+    # El puerto 8000 no se publica: solo Caddy (HTTPS) llega al conector.
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    env_file: .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_datos:/data
+      - caddy_config:/config
+    depends_on:
+      - conector
+
+volumes:
+  datos:
+  caddy_datos:
+  caddy_config:
