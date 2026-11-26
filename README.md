@@ -49,3 +49,8 @@ cd conector && ADMIN_TOKEN=una-clave-de-prueba-larga uvicorn app:app --reload
 | `conector/panel.html` | El panel (HTML y JavaScript, sin dependencias) |
 | `tests/` | Pruebas de punta a punta con una Tiendanube falsa |
 | `Dockerfile` · `deploy/` | Todo para subirlo a un servidor con HTTPS |
+| `pages/` | Lo que se publica en GitHub Pages: el modelo de tienda furor.mza y una demo del panel con datos inventados |
+
+## Páginas de muestra (GitHub Pages)
+
+En `https://bsturniolo.github.io/ecomers/` quedan el modelo de tienda **furor.mza** y una **demo del panel**. La demo usa el mismo `conector/panel.html` de siempre más `pages/panel/demo.js`, que inventa productos y ventas en el navegador: no se conecta a ninguna tienda y lo que se carga se borra al recargar. Se publica sola cada vez que cambia algo en `main` (`.github/workflows/pages.yml`). Para verla en la compu: `sh pages/armar.sh` y abrir `_site/` con un servidor (por ejemplo `python3 -m http.server -d _site`).
