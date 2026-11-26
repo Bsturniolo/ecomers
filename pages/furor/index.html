@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body { margin: 0; }</style>
+<title>Propuesta B virales</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: vidriera de redes. Bloques grandes con fondos de color por "para quién", tarjetas con precio en sticker, todo pensado para el pulgar en el celu. */
+/* Paleta fija de la marca (propuesta B): un solo tema claro a propósito, como la tienda real. */
+:root {
+  --papel: #FAF9F6;
+  --tinta: #141414;
+  --gris: #5C5C5C;
+  --borde: #E4E2DC;
+  --amarillo: #FFD43B;
+  --casa: #FFE6A8;
+  --moto: #CFE3FF;
+  --celu: #E6DCFF;
+  --calor: #FFD6CC;
+  --auto: #D5F0D1;
+  --regalo: #FFDDEE;
+  --verde: #1F7A3E;
+  --ph: #FFF3C4;
+  --display: "Bricolage Grotesque", "Arial Black", Arial, sans-serif;
+  --sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { background: var(--papel); color: var(--tinta); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--papel); }
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--tinta); outline-offset: 2px; }
+.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.inner { max-width: 1180px; margin: 0 auto; }
+.num { font-variant-numeric: tabular-nums; }
+.ph { background: var(--ph); border-bottom: 1px dashed #B08A00; padding: 0 3px; white-space: nowrap; color: var(--tinta); }
+body.no-ph .ph { background: none; border: 0; padding: 0; color: inherit; }
+h1, h2, h3 { font-family: var(--display); font-weight: 800; margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+
+.proto { background: var(--tinta); color: #fff; font-size: 12.5px; padding-block: 8px; }
+.proto .inner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.proto label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+
+/* Ticker */
+.ticker { background: var(--amarillo); overflow: hidden; border-bottom: 2px solid var(--tinta); }
+.ticker .track { display: flex; width: max-content; animation: run 38s linear infinite; }
+.ticker span { padding: 9px 22px; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.ticker span::after { content: "✦"; margin-left: 44px; }
+@keyframes run { to { transform: translateX(-50%); } }
+
+header.site { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--papel); border-bottom: 2px solid var(--tinta); }
+.hrow { display: flex; align-items: center; gap: 16px; padding-block: 12px; }
+.logo { font-family: var(--display); font-weight: 800; font-size: 24px; text-decoration: none; letter-spacing: -.03em; white-space: nowrap; }
+.search { flex: 1; min-width: 0; display: flex; }
+.search input { flex: 1; min-width: 0; border: 2px solid var(--tinta); border-radius: 999px; padding: 10px 16px; font: inherit; background: #fff; color: var(--tinta); }
+.cart-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--tinta); color: #fff; border: 0; border-radius: 999px; padding: 10px 16px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.cart-btn b { background: var(--amarillo); color: var(--tinta); border-radius: 999px; min-width: 22px; height: 22px; display: inline-grid; place-items: center; font-size: 12px; padding: 0 5px; }
+
+main { display: flex; flex-direction: column; gap: 56px; padding-bottom: 72px; }
+
+/* Hero */
+.hero .inner { display: grid; grid-template-columns: 1fr 1.05fr; gap: 32px; align-items: center; padding-top: 36px; }
+.hero h1 { font-size: clamp(40px, 6.4vw, 76px); line-height: .95; }
+.hero h1 mark { background: var(--amarillo); color: var(--tinta); padding: 0 .12em; border-radius: 8px; }
+.hero p { font-size: 17px; color: var(--gris); max-width: 42ch; margin: 18px 0 24px; }
+.cta { display: inline-flex; align-items: center; gap: 10px; background: var(--tinta); color: #fff; text-decoration: none; font-weight: 700; padding: 15px 26px; border-radius: 999px; border: 2px solid var(--tinta); cursor: pointer; }
+.cta.alt { background: #fff; color: var(--tinta); }
+.cta:hover { transform: translateY(-1px); }
+.proof { display: flex; gap: 22px; margin-top: 26px; flex-wrap: wrap; }
+.proof div { display: flex; flex-direction: column; }
+.proof strong { font-family: var(--display); font-size: 28px; line-height: 1; }
+.proof span { font-size: 13px; color: var(--gris); }
+.collage { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; gap: 12px; }
+.tile { position: relative; border-radius: 24px; border: 2px solid var(--tinta); display: grid; place-items: center; aspect-ratio: 1; max-width: 100%; overflow: hidden; text-decoration: none; }
+.tile svg { width: 58%; height: auto; }
+.collage .big { grid-row: span 2; aspect-ratio: auto; min-height: 100%; }
+.collage .big svg { width: 66%; }
+.sticker { position: absolute; background: var(--amarillo); border: 2px solid var(--tinta); border-radius: 999px; font-weight: 800; font-family: var(--display); padding: 6px 12px; font-size: 16px; transform: rotate(-6deg); }
+.tile .sticker { right: 10px; bottom: 12px; }
+.tile .lab { position: absolute; left: 12px; top: 12px; background: #fff; border: 2px solid var(--tinta); border-radius: 999px; font-size: 11px; font-weight: 700; padding: 3px 9px; text-transform: uppercase; letter-spacing: .04em; }
+
+/* Para quién */
+.sec-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+.sec-head h2 { font-size: clamp(28px, 4vw, 44px); line-height: 1; }
+.sec-head a { font-weight: 700; font-size: 14px; }
+.para { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.para a { border: 2px solid var(--tinta); border-radius: 22px; padding: 16px 14px 0; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; text-decoration: none; min-height: 190px; overflow: hidden; min-width: 0; }
+.para a:hover { transform: translateY(-3px); box-shadow: 0 4px 0 var(--tinta); }
+.para small { font-size: 12px; font-weight: 600; color: var(--gris); }
+.para b { font-family: var(--display); font-size: 22px; line-height: 1.02; }
+.para svg { width: 78%; height: auto; align-self: flex-end; margin-bottom: -10%; }
+
+/* Ranking virales */
+.rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr); gap: 14px; overflow-x: auto; padding-bottom: 10px; scroll-snap-type: x mandatory; }
+.rcard { scroll-snap-align: start; display: flex; flex-direction: column; gap: 8px; text-decoration: none; min-width: 0; cursor: pointer; background: none; border: 0; padding: 0; text-align: left; }
+.rcard .tile { aspect-ratio: 4 / 5; }
+.rank { position: absolute; left: 12px; bottom: 6px; font-family: var(--display); font-weight: 800; font-size: 64px; line-height: 1; color: var(--tinta); -webkit-text-stroke: 0; opacity: .9; }
+.rcard .name { font-weight: 600; font-size: 14.5px; line-height: 1.3; }
+.prices { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.prices .now { font-family: var(--display); font-weight: 800; font-size: 22px; }
+.prices .was { color: var(--gris); text-decoration: line-through; font-size: 13px; }
+.mini { font-size: 12.5px; color: var(--gris); }
+.mini b { color: var(--verde); }
+.pill { position: absolute; top: 12px; right: 12px; background: var(--tinta); color: #fff; border-radius: 999px; font-size: 11px; font-weight: 700; padding: 4px 10px; text-transform: uppercase; letter-spacing: .04em; }
+.pill.y { background: var(--amarillo); color: var(--tinta); border: 2px solid var(--tinta); }
+
+/* Combo */
+.combo .inner { background: var(--amarillo); border: 2px solid var(--tinta); border-radius: 28px; padding: 32px; display: grid; grid-template-columns: 1fr 1.2fr; gap: 28px; align-items: center; }
+.combo h2 { font-size: clamp(32px, 5vw, 56px); line-height: .95; }
+.combo p { margin: 12px 0 20px; font-size: 16px; max-width: 40ch; }
+.combo-items { display: flex; align-items: center; gap: 10px; }
+.combo-items .tile { flex: 1; background: #fff; }
+.plus { font-family: var(--display); font-size: 40px; font-weight: 800; }
+
+/* Grilla precio */
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+.tabs button { border: 2px solid var(--tinta); background: #fff; border-radius: 999px; padding: 8px 16px; font-weight: 700; cursor: pointer; }
+.tabs button.on { background: var(--tinta); color: #fff; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px 14px; }
+.grid .rcard .tile { aspect-ratio: 1; }
+
+/* Ficha */
+.pdp .inner { border: 2px solid var(--tinta); border-radius: 28px; background: #fff; padding: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.pdp .eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--gris); margin: 0 0 8px; }
+.pdp .gal { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pdp .gal .tile { border-radius: 22px; }
+.thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.thumbs .tile { border-radius: 14px; border-width: 1.5px; }
+.buy { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.buy h2 { font-size: clamp(28px, 3.4vw, 40px); line-height: 1; }
+.stars { font-size: 14px; color: var(--gris); }
+.stars b { color: var(--tinta); }
+.buy .prices .now { font-size: 38px; }
+.paybox { border: 2px solid var(--tinta); border-radius: 16px; overflow: hidden; }
+.paybox div { padding: 10px 14px; display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.paybox div + div { border-top: 1.5px solid var(--borde); }
+.paybox .t { background: #EAF6EC; color: var(--verde); font-weight: 700; }
+.urg { display: flex; gap: 8px; align-items: center; font-weight: 600; font-size: 14px; }
+.urg i { width: 10px; height: 10px; border-radius: 50%; background: #E03131; display: inline-block; }
+.packs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.packs button { border: 2px solid var(--borde); background: #fff; border-radius: 14px; padding: 10px 8px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; text-align: center; position: relative; }
+.packs button.on { border-color: var(--tinta); background: var(--papel); }
+.packs b { font-size: 15px; }
+.packs small { font-size: 12px; color: var(--gris); }
+.packs em { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: var(--amarillo); border: 1.5px solid var(--tinta); border-radius: 999px; font-style: normal; font-size: 10.5px; font-weight: 800; padding: 1px 8px; white-space: nowrap; }
+.buy .cta { justify-content: center; width: 100%; font-size: 16px; }
+.wa { background: #fff; color: var(--tinta); }
+.benef { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; }
+.benef span { background: var(--papel); border-radius: 12px; padding: 10px 12px; }
+
+/* Visto en redes */
+.social { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.reel { aspect-ratio: 9 / 14; max-width: 100%; border-radius: 22px; border: 2px solid var(--tinta); position: relative; display: grid; place-items: center; overflow: hidden; }
+.reel svg { width: 60%; height: auto; }
+.reel .play { position: absolute; width: 48px; height: 48px; border-radius: 50%; background: rgba(20, 20, 20, .82); display: grid; place-items: center; }
+.reel .play::after { content: ""; border-left: 15px solid #fff; border-top: 9px solid transparent; border-bottom: 9px solid transparent; margin-left: 4px; }
+.reel .cap { position: absolute; left: 10px; right: 10px; bottom: 10px; background: #fff; border-radius: 12px; padding: 8px 10px; font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+.reviews { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+.reviews div { background: #fff; border: 1.5px solid var(--borde); border-radius: 18px; padding: 16px; font-size: 14px; display: flex; flex-direction: column; gap: 8px; }
+.reviews .s { letter-spacing: 2px; }
+.reviews small { color: var(--gris); }
+
+footer.site { background: var(--tinta); color: #fff; font-size: 13.5px; }
+footer .cols { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 24px; padding-block: 44px 24px; }
+footer .big { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 4vw, 44px); line-height: 1; letter-spacing: -.03em; }
+footer h4 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--amarillo); }
+footer ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+footer a { text-decoration: none; }
+footer .legal { border-top: 1px solid #333; padding-block: 16px; display: flex; gap: 12px 24px; flex-wrap: wrap; justify-content: space-between; align-items: center; color: #BDBDBD; }
+footer .arrep { border: 2px solid var(--amarillo); color: var(--amarillo); border-radius: 999px; padding: 7px 14px; font-weight: 700; }
+
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--tinta); color: #fff; border-radius: 999px; padding: 12px 20px; font-size: 14px; font-weight: 600; z-index: 50; max-width: calc(100% - 32px); text-align: center; }
+
+@media (max-width: 980px) {
+  .para { grid-template-columns: repeat(3, 1fr); }
+  .grid, .social { grid-template-columns: repeat(3, 1fr); }
+  .social .reel:nth-child(4) { display: none; }
+  footer .cols { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 760px) {
+  .hrow { flex-wrap: wrap; }
+  .logo { flex: 1; }
+  .search { order: 5; flex-basis: 100%; }
+  .hero .inner, .combo .inner, .pdp .inner { grid-template-columns: 1fr; }
+  .hero .inner { padding-top: 24px; }
+  .para { grid-template-columns: repeat(2, 1fr); }
+  .para a { min-height: 160px; }
+  .grid { grid-template-columns: repeat(2, 1fr); }
+  .social { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 46%; overflow-x: auto; }
+  .social .reel:nth-child(4) { display: grid; }
+  .reviews { grid-template-columns: 1fr; }
+  .combo .inner, .pdp .inner { padding: 20px; }
+  main { gap: 44px; }
+}
+@media (max-width: 420px) {
+  .rail { grid-auto-columns: 70%; }
+  .proof strong { font-size: 24px; }
+  footer .cols { grid-template-columns: 1fr; }
+  .sticker { font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .ticker .track { animation: none; } * { transition: none !important; } }
+</style>
+
+<div class="proto gutter"><div class="inner">
+  <span><b>Propuesta B · Tienda de virales.</b> Maqueta visual: marca, productos y datos son inventados para la demo.</span>
+</div></div>
+
+<div class="ticker" aria-label="Beneficios"><div class="track" id="ticker"></div></div>
+
+<header class="site gutter">
+  <div class="inner hrow">
+    <a class="logo" href="#top" id="logo"></a>
+    <form class="search" id="search-form" role="search"><input id="search-input" type="search" placeholder="¿Qué viste en TikTok? Buscalo acá" aria-label="Buscar"></form>
+    <button class="cart-btn" type="button" id="cart-btn">Carrito <b class="num" id="cart-n">0</b></button>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero gutter"><div class="inner">
+    <div>
+      <h1>Lo que se hace <mark>viral</mark>, en tu casa en 48 hs.</h1>
+      <p>Gadgets, accesorios para la moto y cosas útiles para la casa, importados y con envío propio en Gran Mendoza.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="cta" href="#virales">Ver los más virales</a><a class="cta alt" href="#precio">Todo a menos de $10.000</a></div>
+      <div class="proof"><div><strong class="num">+1.200</strong><span>pedidos entregados</span></div><div><strong>4,9★</strong><span>en Google</span></div><div><strong class="num">48 hs</strong><span>y lo tenés en casa</span></div></div>
+    </div>
+    <div class="collage" id="collage"></div>
+  </div></section>
+
+  <section class="gutter"><div class="inner">
+    <div class="sec-head"><h2>¿Para quién es?</h2></div>
+    <div class="para" id="para"></div>
+  </div></section>
+
+  <section class="gutter" id="virales"><div class="inner">
+    <div class="sec-head"><h2>Top virales de la semana</h2><a href="#virales">Ver todo</a></div>
+    <div class="rail" id="rail"></div>
+  </div></section>
+
+  <section class="combo gutter"><div class="inner">
+    <div><h2>Llevá 2 y pagá menos.</h2><p>Soporte de celular + luces LED para la moto, con 15% off llevando los dos.</p>
+      <button class="cta" type="button" data-add="combo">Sumar el combo · <span class="num" id="combo-price"></span></button></div>
+    <div class="combo-items" id="combo-items"></div>
+  </div></section>
+
+  <section class="gutter" id="precio"><div class="inner">
+    <div class="sec-head"><h2>Comprá por precio</h2></div>
+    <div class="tabs" id="tabs"><button type="button" class="on" data-max="10000">Menos de $10.000</button><button type="button" data-max="20000">Menos de $20.000</button><button type="button" data-max="30000">Menos de $30.000</button></div>
+    <div class="grid" id="price-grid"></div>
+  </div></section>
+
+  <section class="pdp gutter" id="ficha"><div class="inner" id="pdp"></div></section>
+
+  <section class="gutter"><div class="inner">
+    <div class="sec-head"><h2>Visto en @furor.mza</h2><a href="#top">Seguinos en Instagram y TikTok</a></div>
+    <div class="social" id="social"></div>
+    <div class="reviews">
+      <div><span class="s">★★★★★</span><p style="margin:0">“Pedí el soporte para la moto a la mañana y al otro día lo tenía. Re firme.”</p><small>Martín, Las Heras</small></div>
+      <div><span class="s">★★★★★</span><p style="margin:0">“El ventilador de mano me salvó el verano. Ya compré otro para regalar.”</p><small>Lucía, Godoy Cruz</small></div>
+      <div><span class="s">★★★★★</span><p style="margin:0">“Me respondieron por WhatsApp al toque y pagué en cuotas con Mercado Pago.”</p><small>Romina, Maipú</small></div>
+    </div>
+  </div></section>
+</main>
+
+<footer class="site gutter">
+  <div class="inner cols">
+    <div><div class="big" id="foot-logo"></div><p style="margin:12px 0 0;color:#BDBDBD;max-width:32ch">Productos importados con envío propio en Gran Mendoza.</p></div>
+    <div><h4>Comprar</h4><ul><li><a href="#virales">Más virales</a></li><li><a href="#precio">Por precio</a></li><li><a href="#top">Combos</a></li><li><a href="#top">Ofertas</a></li></ul></div>
+    <div><h4>Ayuda</h4><ul><li><a href="#top">Cómo comprar</a></li><li><a href="#top">Envíos en 48 hs</a></li><li><a href="#top">Cambios y devoluciones</a></li></ul></div>
+    <div><h4>Hablemos</h4><ul><li>WhatsApp 261 555-0187</li><li>Instagram @furor.mza</li><li>TikTok @furor.mza</li></ul></div>
+  </div>
+  <div class="inner legal"><span>© 2026 furor.mza · CUIT 20-31458872-4 · Defensa de las y los Consumidores: <a href="https://www.argentina.gob.ar/produccion/defensadelconsumidor/formulario" target="_blank" rel="noopener" style="text-decoration:underline">reclamos acá</a></span><a class="arrep" href="#top">Botón de arrepentimiento</a></div>
+</footer>
+
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script>
+var STORE = { nombre: 'furor.mza', cuotas: 6, transferencia: 10 };
+var S = 'fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"';
+var ICONS = {
+  fan: '<circle cx="60" cy="48" r="32"/><path d="M60 48c-4-12 2-24 12-24 8 0 10 10 2 16M60 48c12 2 18 14 12 22-5 6-14 2-12-7M60 48c-8 10-22 10-25 1-2-8 7-12 13-6"/><circle cx="60" cy="48" r="5"/><path d="M60 80v22M42 104h36"/>',
+  fanmini: '<circle cx="60" cy="40" r="24"/><path d="M60 40c-3-9 2-17 9-17 6 0 7 7 1 11M60 40c9 2 13 10 9 16-4 4-10 1-9-5M60 40c-6 7-16 7-18 1-1-6 5-9 10-4"/><rect x="53" y="64" width="14" height="40" rx="6"/><path d="M57 74h6"/>',
+  phone: '<rect x="38" y="14" width="44" height="88" rx="10"/><rect x="45" y="21" width="16" height="22" rx="5"/><circle cx="53" cy="28" r="3"/><circle cx="53" cy="37" r="3"/>',
+  charger: '<rect x="36" y="40" width="48" height="44" rx="9"/><path d="M50 40V24M70 40V24M60 84c0 10-8 12-8 22"/><path d="M57 54l-4 10h8l-4 10"/>',
+  buds: '<rect x="28" y="58" width="64" height="40" rx="18"/><path d="M28 72h64"/><circle cx="46" cy="40" r="10"/><circle cx="74" cy="40" r="10"/><path d="M46 50v8M74 50v8"/>',
+  speaker: '<rect x="22" y="34" width="76" height="54" rx="27"/><circle cx="46" cy="61" r="11"/><circle cx="74" cy="61" r="11"/><path d="M38 34v-8h44v8"/>',
+  mount: '<rect x="44" y="14" width="32" height="56" rx="6"/><path d="M38 30v-6h6M82 30v-6h-6M38 58v6h6M82 58v6h-6M60 70v18"/><rect x="50" y="86" width="20" height="12" rx="3"/><path d="M14 92h92"/>',
+  led: '<path d="M30 40h26a20 20 0 0 1 0 40H30z"/><path d="M30 40v40M86 46l18-6M86 60h20M86 74l18 6"/>',
+  glove: '<path d="M40 104V62M40 62V36a6 6 0 0 1 12 0v22M52 58V30a6 6 0 0 1 12 0v28M64 58V34a6 6 0 0 1 12 0v26M76 60V46a6 6 0 0 1 12 0v30c0 16-10 28-26 28H40"/><path d="M40 72c-8-6-16-4-18 2 6 6 10 14 18 20"/>',
+  helmet: '<path d="M22 78c0-30 20-52 44-52 22 0 36 18 36 40v16H22z"/><path d="M56 52h44v18H60a8 8 0 0 1-8-8z"/><path d="M28 94h70"/>',
+  cover: '<path d="M14 84c6-26 26-40 46-40h10c18 0 30 12 36 26l2 14z"/><circle cx="34" cy="90" r="12"/><circle cx="88" cy="90" r="12"/><path d="M48 44c4-10 12-16 22-16"/>',
+  turntable: '<ellipse cx="60" cy="92" rx="42" ry="10"/><rect x="28" y="50" width="18" height="38" rx="3"/><rect x="51" y="40" width="18" height="48" rx="3"/><rect x="74" y="56" width="18" height="32" rx="3"/><path d="M28 60h18M51 50h18M74 64h18"/>',
+  boxes: '<rect x="24" y="66" width="72" height="32" rx="4"/><rect x="20" y="58" width="80" height="10" rx="3"/><rect x="34" y="32" width="52" height="24" rx="4"/><rect x="30" y="24" width="60" height="9" rx="3"/>',
+  bulb: '<path d="M60 18a24 24 0 0 0-14 43c3 3 4 6 4 10h20c0-4 1-7 4-10a24 24 0 0 0-14-43z"/><path d="M50 82h20M52 92h16"/><path d="M96 34a30 30 0 0 1 0 30M24 34a30 30 0 0 0 0 30"/>',
+  mop: '<path d="M60 12v66"/><rect x="54" y="30" width="12" height="18" rx="3"/><path d="M34 86c0-6 12-10 26-10s26 4 26 10-12 10-26 10-26-4-26-10z"/><path d="M40 94l-4 10M52 96l-2 10M68 96l2 10M80 94l4 10"/>',
+  tools: '<rect x="20" y="36" width="80" height="54" rx="6"/><path d="M34 48v30M46 48v30M58 48v30M70 48v30"/><rect x="80" y="46" width="10" height="34" rx="3"/><path d="M48 36v-8h24v8"/>',
+  drill: '<path d="M22 40h52a10 10 0 0 1 10 10v4a10 10 0 0 1-10 10H22z"/><path d="M84 52h22"/><path d="M40 64l-6 30h24l4-30"/><rect x="30" y="92" width="32" height="12" rx="3"/><path d="M50 40v-8"/>',
+  brush: '<rect x="52" y="54" width="16" height="52" rx="7"/><rect x="36" y="14" width="48" height="40" rx="12"/><path d="M44 24v20M52 24v20M60 24v20M68 24v20M76 24v20"/>',
+  vacuum: '<path d="M18 52h56l10 10v18H30a12 12 0 0 1-12-12z"/><path d="M84 66h20l4 6"/><path d="M32 52V40a8 8 0 0 1 8-8h22"/><path d="M30 66h30"/>',
+  drone: '<rect x="46" y="50" width="28" height="20" rx="6"/><path d="M46 56L28 40M74 56l18-16M46 64L28 80M74 64l18 16"/><ellipse cx="26" cy="38" rx="14" ry="4"/><ellipse cx="94" cy="38" rx="14" ry="4"/><ellipse cx="26" cy="82" rx="14" ry="4"/><ellipse cx="94" cy="82" rx="14" ry="4"/><circle cx="60" cy="74" r="4"/>',
+  stars: '<path d="M26 92a34 34 0 0 1 68 0z"/><path d="M20 92h80M60 24l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1zM28 40l2 4 4 1-3 3 1 4-4-2-4 2 1-4-3-3 4-1zM92 36l2 4 4 1-3 3 1 4-4-2-4 2 1-4-3-3 4-1z"/>',
+  heater: '<rect x="26" y="26" width="68" height="62" rx="8"/><path d="M38 40c6 6-6 12 0 18s-6 12 0 18M60 40c6 6-6 12 0 18s-6 12 0 18M82 40c6 6-6 12 0 18s-6 12 0 18"/><path d="M36 88v12M84 88v12"/>',
+  watch: '<rect x="38" y="36" width="44" height="48" rx="10"/><path d="M46 36l4-20h20l4 20M46 84l4 20h20l4-20M60 50v12l8 6"/>',
+  home: '<path d="M18 56L60 22l42 34"/><path d="M28 50v50h64V50"/><rect x="50" y="68" width="20" height="32"/>',
+  sale: '<path d="M22 22h40l40 40-40 40-40-40z"/><circle cx="42" cy="42" r="7"/><path d="M50 80l26-26"/>',
+  gift: '<rect x="20" y="46" width="80" height="18"/><rect x="26" y="64" width="68" height="38"/><path d="M60 46v56M60 46c-8-18-28-18-26-6 2 8 26 6 26 6zM60 46c8-18 28-18 26-6-2 8-26 6-26 6z"/>',
+  moto: '<circle cx="28" cy="80" r="16"/><circle cx="92" cy="80" r="16"/><path d="M28 80l20-26h24l20 26M48 54l-6-12h-12M72 54l6-16h12M52 80h20"/>',
+  beauty: '<rect x="44" y="40" width="32" height="64" rx="6"/><rect x="50" y="22" width="20" height="18" rx="3"/><path d="M44 60h32"/>'
+};
+function svg(n) { return '<svg viewBox="0 0 120 120" ' + S + ' aria-hidden="true">' + (ICONS[n] || ICONS.boxes) + '</svg>'; }
+var P = [
+  { id: 'mini-ventilador', n: 'Mini ventilador de mano plegable', icon: 'fanmini', bg: 'calor', precio: 6900, ventas: 99, stock: 7 },
+  { id: 'auriculares', n: 'Auriculares inalámbricos con estuche', icon: 'buds', bg: 'celu', precio: 16900, antes: 21900, ventas: 97, stock: 12 },
+  { id: 'soporte-moto', n: 'Soporte de celular para moto de aluminio', icon: 'mount', bg: 'moto', precio: 14900, ventas: 92, stock: 4 },
+  { id: 'luz-sensor', n: 'Luz LED con sensor de movimiento', icon: 'bulb', bg: 'casa', precio: 8900, ventas: 90, stock: 20 },
+  { id: 'proyector', n: 'Lámpara proyector de estrellas', icon: 'stars', bg: 'regalo', precio: 17900, ventas: 88, stock: 9 },
+  { id: 'organizador', n: 'Organizador giratorio de cocina', icon: 'turntable', bg: 'casa', precio: 12900, ventas: 80, stock: 15 },
+  { id: 'cepillo', n: 'Cepillo alisador eléctrico', icon: 'brush', bg: 'regalo', precio: 21900, ventas: 76, stock: 6 },
+  { id: 'ventilador-usb', n: 'Ventilador de mesa recargable USB', icon: 'fan', bg: 'calor', precio: 18500, ventas: 74, stock: 10 },
+  { id: 'luces-moto', n: 'Kit de luces LED auxiliares para moto', icon: 'led', bg: 'moto', precio: 29900, ventas: 70, stock: 5 },
+  { id: 'funda', n: 'Funda antigolpe para Samsung', icon: 'phone', bg: 'celu', precio: 6500, antes: 8500, ventas: 66, stock: 30 },
+  { id: 'cargador', n: 'Cargador rápido 20 W USB-C', icon: 'charger', bg: 'celu', precio: 9900, ventas: 64, stock: 25 },
+  { id: 'destornilladores', n: 'Set de destornilladores de precisión 25 en 1', icon: 'tools', bg: 'auto', precio: 11900, ventas: 50, stock: 14 },
+  { id: 'aspiradora', n: 'Aspiradora de mano para auto', icon: 'vacuum', bg: 'auto', precio: 23900, ventas: 48, stock: 8 },
+  { id: 'parlante', n: 'Parlante bluetooth resistente al agua', icon: 'speaker', bg: 'celu', precio: 24900, ventas: 46, stock: 11 }
+];
+function byId(id) { return P.filter(function (p) { return p.id === id; })[0]; }
+function $(s) { return document.querySelector(s); }
+function money(n) { return '$' + Math.round(n).toLocaleString('es-AR'); }
+function ph(s) { return s; }
+function tile(p, extra, cls) { return '<div class="tile ' + (cls || '') + '" style="background:var(--' + p.bg + ')">' + svg(p.icon) + (extra || '') + '</div>'; }
+function card(p, rank) {
+  var badge = p.antes ? '<span class="pill y">' + Math.round((1 - p.precio / p.antes) * 100) + '% off</span>' : (p.stock <= 5 ? '<span class="pill">Quedan ' + p.stock + '</span>' : '');
+  return '<button type="button" class="rcard" data-show="' + p.id + '">' + tile(p, badge + (rank ? '<span class="rank">' + rank + '</span>' : '')) +
+    '<span class="name">' + p.n + '</span><span class="prices num"><span class="now">' + money(p.precio) + '</span>' + (p.antes ? '<span class="was">' + money(p.antes) + '</span>' : '') + '</span>' +
+    '<span class="mini num"><b>' + money(p.precio * (1 - STORE.transferencia / 100)) + '</b> con transferencia</span></button>';
+}
+
+$('#ticker').innerHTML = (function () {
+  var items = ['Envío propio en Gran Mendoza en 48 hs', ph(STORE.cuotas + ' cuotas sin interés') + ' con Mercado Pago', ph(STORE.transferencia + '% off') + ' pagando por transferencia', 'Envío gratis llevando ' + '2 productos', 'Consultas por WhatsApp'];
+  var one = items.map(function (t) { return '<span>' + t + '</span>'; }).join('');
+  return one + one;
+})();
+$('#logo').innerHTML = ph(STORE.nombre);
+$('#foot-logo').innerHTML = ph(STORE.nombre);
+$('#collage').innerHTML =
+  '<a class="tile big" href="#ficha" data-show="mini-ventilador" style="background:var(--calor)"><span class="lab">#1 viral</span>' + svg('fanmini') + '<span class="sticker num">' + money(6900) + '</span></a>' +
+  '<a class="tile" href="#ficha" data-show="soporte-moto" style="background:var(--moto)">' + svg('mount') + '<span class="sticker num">' + money(14900) + '</span></a>' +
+  '<a class="tile" href="#ficha" data-show="proyector" style="background:var(--regalo)">' + svg('stars') + '<span class="sticker num">' + money(17900) + '</span></a>';
+var PARA = [['casa', 'Para tu', 'casa', 'home'], ['moto', 'Para tu', 'moto', 'moto'], ['auto', 'Para tu', 'auto', 'vacuum'], ['celu', 'Para tu', 'celu', 'phone'], ['calor', 'Para el', 'calor', 'fan'], ['regalo', 'Para', 'regalar', 'gift']];
+$('#para').innerHTML = PARA.map(function (x) { return '<a href="#precio" style="background:var(--' + x[0] + ')"><span><small>' + x[1] + '</small><br><b>' + x[2] + '</b></span>' + svg(x[3]) + '</a>'; }).join('');
+$('#rail').innerHTML = P.slice().sort(function (a, b) { return b.ventas - a.ventas; }).slice(0, 8).map(function (p, i) { return card(p, i + 1); }).join('');
+var c1 = byId('soporte-moto'), c2 = byId('luces-moto'), comboPrice = (c1.precio + c2.precio) * .85;
+$('#combo-price').textContent = money(comboPrice);
+$('#combo-items').innerHTML = tile(c1, '<span class="sticker num" style="font-size:13px">' + money(c1.precio) + '</span>') + '<span class="plus">+</span>' + tile(c2, '<span class="sticker num" style="font-size:13px">' + money(c2.precio) + '</span>');
+function priceGrid(max) { $('#price-grid').innerHTML = P.filter(function (p) { return p.precio <= max; }).sort(function (a, b) { return a.precio - b.precio; }).slice(0, 8).map(function (p) { return card(p); }).join(''); }
+priceGrid(10000);
+$('#social').innerHTML = [['soporte-moto', 'Así queda el soporte en una Honda Wave'], ['luz-sensor', 'Probamos la luz con sensor en el placard'], ['mini-ventilador', 'El ventilador que todos llevan al trabajo'], ['proyector', 'El regalo que pidieron todos']].map(function (x) { var p = byId(x[0]); return '<div class="reel" style="background:var(--' + p.bg + ')">' + svg(p.icon) + '<span class="play"></span><span class="cap">' + x[1] + '</span></div>'; }).join('');
+
+var cur = { id: 'soporte-moto', pack: 1 };
+function pdp() {
+  var p = byId(cur.id), packPrice = [p.precio, p.precio * 2 * .9, p.precio * 3 * .85][cur.pack - 1];
+  $('#pdp').innerHTML =
+    '<div class="gal">' + tile(p, p.antes ? '<span class="pill y">Oferta</span>' : '<span class="pill">Viral</span>') + '<div class="thumbs">' + [0, 1, 2, 3].map(function () { return tile(p); }).join('') + '</div><p class="mini">En la tienda real: fotos con fondo blanco y un video corto del producto en uso.</p></div>' +
+    '<div class="buy"><div><p class="eyebrow">Así se ve un producto</p><h2>' + p.n + '</h2></div>' +
+      '<div class="stars"><b>★★★★★</b> ' + '4,9 · 128 opiniones' + '</div>' +
+      '<div class="prices num"><span class="now">' + money(p.precio) + '</span>' + (p.antes ? '<span class="was">' + money(p.antes) + '</span>' : '') + '</div>' +
+      '<div class="paybox num"><div class="t"><span>Con transferencia</span><span>' + money(p.precio * (1 - STORE.transferencia / 100)) + '</span></div><div><span>' + ph(STORE.cuotas + ' cuotas sin interés') + '</span><span>' + money(p.precio / STORE.cuotas) + ' por mes</span></div></div>' +
+      '<div class="urg"><i></i>Quedan ' + ph(p.stock + ' unidades') + ' · ' + '23' + ' personas lo están viendo</div>' +
+      '<div class="packs num">' + [['1 unidad', p.precio, ''], ['2 unidades', p.precio * 2 * .9, '10% off'], ['3 unidades', p.precio * 3 * .85, '15% off']].map(function (x, i) { return '<button type="button" data-pack="' + (i + 1) + '" class="' + (cur.pack === i + 1 ? 'on' : '') + '">' + (x[2] ? '<em>' + x[2] + '</em>' : '') + '<b>' + x[0] + '</b><small>' + money(x[1]) + '</small></button>'; }).join('') + '</div>' +
+      '<button class="cta" type="button" data-add="pdp">Agregar al carrito · <span class="num">' + money(packPrice) + '</span></button>' +
+      '<button class="cta wa" type="button" data-wa="1">Preguntar por WhatsApp</button>' +
+      '<div class="benef"><span>Llega en 48 hs a Gran Mendoza</span><span>Pago seguro con Mercado Pago</span><span>Cambios gratis por 30 días</span><span>Garantía de 6 meses</span></div>' +
+    '</div>';
+}
+pdp();
+
+var n = 0, tt;
+function toast(t) { var el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(tt); tt = setTimeout(function () { el.hidden = true; }, 2600); }
+document.addEventListener('click', function (e) {
+  var t = e.target.closest('[data-show],[data-max],[data-pack],[data-add],[data-wa],#cart-btn'); if (!t) return;
+  if (t.hasAttribute('data-show')) { e.preventDefault(); cur = { id: t.getAttribute('data-show'), pack: 1 }; pdp(); document.getElementById('ficha').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
+  else if (t.hasAttribute('data-max')) { document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('on', b === t); }); priceGrid(+t.getAttribute('data-max')); }
+  else if (t.hasAttribute('data-pack')) { cur.pack = +t.getAttribute('data-pack'); pdp(); }
+  else if (t.hasAttribute('data-add')) { n += t.getAttribute('data-add') === 'combo' ? 2 : cur.pack; $('#cart-n').textContent = n; toast('Agregado al carrito'); }
+  else if (t.hasAttribute('data-wa')) { toast('En la tienda real abre WhatsApp con el producto ya escrito'); }
+  else if (t.id === 'cart-btn') { toast('En esta maqueta el carrito es el de la propuesta A'); }
+});
+document.addEventListener('submit', function (e) { e.preventDefault(); toast('La búsqueda funciona en la propuesta A'); });
+
+</script>
+
+</html>
