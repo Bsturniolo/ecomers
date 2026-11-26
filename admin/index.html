@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel de la tienda</title>
+<style>body { margin: 0; background: #0f1220; color: #a3a8c3; font: 15px system-ui, sans-serif; } p { padding: 40px 16px; text-align: center; }</style>
+</head>
+<body>
+<p id="cargando">Cargando el panel…</p>
+<script>
+// Demo del panel en GitHub Pages: trae el panel real (conector/panel.html) y le suma demo.js,
+// que inventa los datos en el navegador. Así la demo siempre es igual al panel de verdad.
+fetch('../conector/panel.html', { cache: 'no-store' })
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+  .then(html => {
+    document.open();
+    document.write(html.replace('<head>', '<head>\n<script src="demo.js"><\/script>'));
+    document.close();
+  })
+  .catch(() => { document.getElementById('cargando').textContent = 'No se pudo cargar el panel. Probá recargar la página.'; });
+</script>
+</body>
+</html>

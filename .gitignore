@@ -6,4 +6,3 @@ __pycache__/
 deploy/.env
 .venv/
 datos/
-_site/
