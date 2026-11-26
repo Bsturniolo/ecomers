@@ -1,9 +1,10 @@
 name: Publicar páginas
 
+# Publica el repo tal cual: la tienda queda en la raíz (index.html) y el panel de muestra en /admin/.
+# Sirve igual si en Settings → Pages está elegido "GitHub Actions" o "Deploy from a branch" (main, raíz).
 on:
   push:
     branches: [main]
-    paths: ["pages/**", "conector/panel.html", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
@@ -23,10 +24,9 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - run: sh pages/armar.sh _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: .
       - id: deploy
         uses: actions/deploy-pages@v4

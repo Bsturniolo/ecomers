@@ -274,7 +274,7 @@
     document.head.appendChild(st);
     const c = document.createElement('div');
     c.id = 'demoCartel'; c.setAttribute('role', 'note');
-    c.innerHTML = 'Demo con datos inventados: nada de esto es real y lo que cargues se borra al recargar. <a href="../">Volver</a>';
+    c.innerHTML = 'Demo con datos inventados: nada de esto es real y lo que cargues se borra al recargar. <a href="../">Ver la tienda</a>';
     document.body.prepend(c);
   });
 })();
